@@ -499,6 +499,52 @@ free_pass:
 	}
 }
 
+#ifdef CONFIG_INF_WIRED_PAE
+#include "sta_info.h"
+/**
+ * hostapd_mab_recv_radius - Process incoming RADIUS Authentication messages
+ * @msg: RADIUS response message
+ * @req: RADIUS request message
+ * @shared_secret: RADIUS shared secret
+ * @shared_secret_len: Length of shared_secret in octets
+ * @data: Context data (struct hostapd_data *)
+ * Returns: RADIUS_RX_PROCESSED if RADIUS message was a reply to ACL query (and
+ * was processed here) or RADIUS_RX_UNKNOWN if not.
+ */
+static RadiusRxResult
+hostapd_mab_recv_radius(struct radius_msg *msg, struct radius_msg *req,
+			const u8 *shared_secret, size_t shared_secret_len,
+			void *data)
+{
+	wpa_printf(MSG_INFO, 
+		   "INFWIRED: Received RADIUS Authentication message; code=%d\n",
+           radius_msg_get_hdr(msg)->code);
+	struct hostapd_data *hapd = data;
+	struct radius_hdr *hdr = radius_msg_get_hdr(msg);
+
+	struct hostapd_mab_query_data *query = &hapd->mab_acl_query;
+	if (query->radius_id != hdr->identifier) {
+		return RADIUS_RX_UNKNOWN;
+	}
+
+	struct sta_info *sta = ap_get_sta(hapd, (uint8_t *)(query->addr));
+	if (!sta) {
+		wpa_printf(MSG_ERROR, "INFWIRED: sta for " MACSTR "not found",
+				   MAC2STR(query->addr));
+		return RADIUS_RX_UNKNOWN;
+	}
+
+	wpa_printf(MSG_INFO, "INFWIRED: radius msg code for " MACSTR "is %u",
+			   MAC2STR(query->addr),
+			   hdr->code);
+	int authorized = hdr->code == RADIUS_CODE_ACCESS_ACCEPT ? 1 : 0;
+	ap_sta_set_authorized(hapd, sta, authorized);
+	hostapd_set_authorized(hapd, sta, authorized);
+	hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE8021X,
+			       HOSTAPD_LEVEL_DEBUG, "authorizing port");
+
+}
+#endif
 
 /**
  * hostapd_acl_recv_radius - Process incoming RADIUS Authentication messages
@@ -661,6 +707,23 @@ int hostapd_acl_init(struct hostapd_data *hapd)
 	return 0;
 }
 
+#ifdef CONFIG_INF_WIRED_PAE
+/**
+ * hostapd_mab_init: Initialize IEEE 802.11 ACL
+ * @hapd: hostapd BSS data
+ * Returns: 0 on success, -1 on failure
+ */
+int hostapd_mab_init(struct hostapd_data *hapd)
+{
+#ifndef CONFIG_NO_RADIUS
+	if (radius_client_register(hapd->radius, RADIUS_AUTH,
+				   hostapd_mab_recv_radius, hapd))
+		return -1;
+#endif /* CONFIG_NO_RADIUS */
+
+	return 0;
+}
+#endif
 
 /**
  * hostapd_acl_deinit - Deinitialize IEEE 802.11 ACL

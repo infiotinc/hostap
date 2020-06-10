@@ -4506,6 +4506,10 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 		}
 		bss->mka_psk_set |= MKA_PSK_SET_CKN;
 #endif /* CONFIG_MACSEC */
+#ifdef CONFIG_INF_WIRED_PAE
+	} else if (os_strcmp(buf, "mab") == 0) {
+		conf->mab = atoi(pos);
+#endif
 	} else {
 		wpa_printf(MSG_ERROR,
 			   "Line %d: unknown configuration item '%s'",

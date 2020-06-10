@@ -27,6 +27,10 @@ CFLAGS += -I$(abspath ../src/utils)
 
 export BINDIR ?= /usr/local/bin/
 
+ifdef CONFIG_INF_WIRED_PAE
+CLFAGS += -DCONFIG_INF_WIRED_PAE
+endif
+
 -include .config
 
 ifndef CONFIG_NO_GITVER

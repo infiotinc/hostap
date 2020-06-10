@@ -159,6 +159,11 @@ CONFIG_LIBNL3_ROUTE=y
 endif
 endif
 
+ifdef CONFIG_INF_WIRED_PAE
+DRV_OBJS += ../src/drivers/inf8021x_wired.o
+DRV_CFLAGS += -DCONFIG_INF_WIRED_PAE
+endif
+
 ifdef NEED_LIBNL
 ifndef CONFIG_LIBNL32
 ifndef CONFIG_LIBNL20

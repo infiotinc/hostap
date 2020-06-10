@@ -1008,6 +1008,10 @@ struct hostapd_config {
 	unsigned int airtime_update_interval;
 #define AIRTIME_MODE_MAX (__AIRTIME_MODE_MAX - 1)
 #endif /* CONFIG_AIRTIME_POLICY */
+
+#ifdef CONFIG_INF_WIRED_PAE
+	u8 mab;
+#endif
 };
 
 

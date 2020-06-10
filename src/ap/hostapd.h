@@ -138,6 +138,17 @@ struct hostapd_sae_commit_queue {
 	u8 msg[];
 };
 
+#ifdef CONFIG_INF_WIRED_PAE
+struct hostapd_mab_query_data {
+	struct os_reltime timestamp;
+	u8 radius_id;
+	macaddr addr;
+	u8 *auth_msg; /* IEEE 802.11 authentication frame from station */
+	size_t auth_msg_len;
+	struct hostapd_acl_query_data *next;
+};
+#endif
+
 /**
  * struct hostapd_data - hostapd per-BSS data structure
  */
@@ -183,6 +194,9 @@ struct hostapd_data {
 
 	struct hostapd_cached_radius_acl *acl_cache;
 	struct hostapd_acl_query_data *acl_queries;
+#ifdef CONFIG_INF_WIRED_PAE
+	struct hostapd_mab_query_data mab_acl_query;
+#endif
 
 	struct wpa_authenticator *wpa_auth;
 	struct eapol_authenticator *eapol_auth;

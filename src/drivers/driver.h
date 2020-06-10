@@ -5771,6 +5771,9 @@ extern const struct wpa_driver_ops wpa_driver_roboswitch_ops;
 /* driver_atheros.c */
 extern const struct wpa_driver_ops wpa_driver_atheros_ops;
 #endif /* CONFIG_DRIVER_ATHEROS */
+#ifdef CONFIG_INF_WIRED_PAE /* External Wired PAE */
+extern const struct wpa_driver_ops wpa_driver_infwired_ops;
+#endif
 #ifdef CONFIG_DRIVER_NONE
 extern const struct wpa_driver_ops wpa_driver_none_ops; /* driver_none.c */
 #endif /* CONFIG_DRIVER_NONE */

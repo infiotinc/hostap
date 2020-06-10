@@ -26,6 +26,9 @@ int hostapd_allowed_address(struct hostapd_data *hapd, const u8 *addr,
 			    char **identity, char **radius_cui,
 			    int is_probe_req);
 int hostapd_acl_init(struct hostapd_data *hapd);
+#ifdef CONFIG_INF_WIRED_PAE
+int hostapd_mab_init(struct hostapd_data *hapd);
+#endif
 void hostapd_acl_deinit(struct hostapd_data *hapd);
 void hostapd_free_psk_list(struct hostapd_sta_wpa_psk_short *psk);
 void hostapd_acl_expire(struct hostapd_data *hapd);

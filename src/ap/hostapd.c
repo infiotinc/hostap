@@ -1274,6 +1274,11 @@ static int hostapd_setup_bss(struct hostapd_data *hapd, int first)
 	if (hostapd_init_wps(hapd, conf))
 		return -1;
 
+#ifdef CONFIG_INF_WIRED_PAE
+	if (hostapd_mab_init(hapd)) {
+		return -1;
+	}
+#endif
 #ifdef CONFIG_DPP
 	hapd->gas = gas_query_ap_init(hapd, hapd->msg_ctx);
 	if (!hapd->gas)
