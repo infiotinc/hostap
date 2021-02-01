@@ -539,6 +539,7 @@ hostapd_mab_recv_radius(struct radius_msg *msg, struct radius_msg *req,
 			   hdr->code);
 	int authorized = hdr->code == RADIUS_CODE_ACCESS_ACCEPT ? 1 : 0;
 	ap_sta_set_authorized(hapd, sta, authorized);
+	ap_sta_set_mab_auth(sta, authorized);
 	hostapd_set_authorized(hapd, sta, authorized);
 	hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE8021X,
 			       HOSTAPD_LEVEL_DEBUG, "authorizing port");

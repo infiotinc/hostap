@@ -39,6 +39,8 @@
 #include "sta_info.h"
 #include "vlan.h"
 #include "wps_hostapd.h"
+#include "eapol_auth/eapol_auth_sm.h"
+#include "eapol_auth/eapol_auth_sm_i.h"
 
 static void ap_sta_remove_in_other_bss(struct hostapd_data *hapd,
 				       struct sta_info *sta);
@@ -1246,8 +1248,18 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 			    MAC2STR(sta->addr), MAC2STR(dev_addr));
 	else
 #endif /* CONFIG_P2P */
-		os_snprintf(buf, sizeof(buf), MACSTR, MAC2STR(sta->addr));
+	size_t sz = os_snprintf(buf, sizeof(buf), MACSTR" ", MAC2STR(sta->addr));
+	char *pbuf = buf;
 
+	pbuf += sz;
+	wpa_printf(MSG_INFO, "INFWIRED: AUTH %s", buf);
+	if (sta->eapol_sm) {
+		if (sta->eapol_sm->identity) {
+			memcpy(pbuf, sta->eapol_sm->identity, sta->eapol_sm->identity_len);
+			pbuf += sta->eapol_sm->identity_len;
+			*pbuf = '\0';
+		}
+	}
 	if (hapd->sta_authorized_cb)
 		hapd->sta_authorized_cb(hapd->sta_authorized_cb_ctx,
 					sta->addr, authorized, dev_addr);

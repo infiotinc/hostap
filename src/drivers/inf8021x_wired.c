@@ -15,6 +15,8 @@
 #include "inf8021x_wired.h"
 #include "ap/hostapd.h"
 #include "ap/sta_info.h"
+#include "eapol_auth/eapol_auth_sm.h"
+#include "eapol_auth/eapol_auth_sm_i.h"
 
 #define INFWIRED_DSOCK_BASE "/infroot/workdir/8021x"
 
@@ -91,6 +93,15 @@ static void handle_eapol_mode(void *ctx, unsigned char *buf, size_t len)
 		sa = hdr->src;
 		os_memset(&event, 0, sizeof(event));
 		event.new_sta.addr = sa;
+        struct hostapd_data *hapd = (struct hostapd_data *)ctx;
+        struct sta_info *sta = ap_get_sta(hapd, &hdr->src[0]);
+        if (sta && sta->eapol_sm->auth_pae_state == AUTH_PAE_AUTHENTICATED) {
+            u8* eapol_hdr = (u8*)(hdr + 1);
+            if (eapol_hdr[1] == 1) {
+                wpa_printf(MSG_INFO, "INFWIRED: PAE authencitcated, disconnecting");
+                ap_sta_deauthenticate(hapd, sta, WLAN_REASON_UNSPECIFIED);
+            }
+        }
 		wpa_supplicant_event(ctx, EVENT_NEW_STA, &event);
 
 		pos = (u8 *) (hdr + 1);
@@ -151,6 +162,7 @@ static void handle_mab_mode(void *ctx, unsigned char *buf, size_t len)
             wpa_printf(MSG_ERROR, "INFWIRED: error creating a station");
             return;
         }
+        ap_sta_set_mab(sta, 1);
     }
 
     if (!radius_msg_add_attr(msg, RADIUS_ATTR_USER_NAME,
@@ -227,12 +239,75 @@ static void infwired_data_sock_close(struct wpa_driver_infwired_data *drv)
     return;
 }
 
+static int infwired_send_sta_info(struct hostapd_data *hapd,
+                                  struct sta_info *sta,
+                                  void *ctx)
+{
+    struct infwired_paemsg_hdr *fullhdr;
+    struct infwired_auth_data *authdata;
+    u8 *buf;
+    size_t len;
+    int authorized = 0;
+    int auth_state = 0;
+    struct wpa_driver_infwired_data *drv = ctx;
+
+    if (sta->eapol_sm) {
+        wpa_printf(MSG_INFO, "INFWIRED: Sending STA info - "
+                   "ifname=%s addr=" MACSTR "auth_state=%d",
+                   drv->common.ifname,
+                   MAC2STR(sta->addr),
+                   sta->eapol_sm->auth_pae_state);
+        auth_state = sta->eapol_sm->auth_pae_state;
+        if (auth_state == AUTH_PAE_AUTHENTICATED) {
+            authorized = 1;
+        }
+    }
+
+    len = sizeof(*fullhdr) + sizeof(struct infwired_auth_data);
+    buf = os_zalloc(len);
+    if (buf == NULL) {
+        wpa_printf(MSG_INFO,
+                   "malloc() failed for wired_send_eapol(len=%lu)",
+                   (unsigned long)len);
+        return -1;
+    }
+
+    fullhdr = (struct infwired_paemsg_hdr *)buf;
+    fullhdr->paem_msgtype = INFWIRED_MSG_TYPE_AUTH_DATA;
+    authdata = (struct infwired_auth_data *)(buf + sizeof(*fullhdr));
+    authdata->iad_auth = authorized;
+    memcpy(authdata->iad_sta, sta->addr, ETH_ALEN);
+    wpa_printf(MSG_INFO, "INFWIRED: Sending STA info - ifname=%s addr=" MACSTR
+		   " auth_state=0x%x authorized=%d",
+		   drv->common.ifname,
+           MAC2STR(sta->addr),
+		   auth_state,
+           authorized);
+    int res = send(drv->common.sock, (u8 *)buf, len, 0);
+    os_free(buf);
+
+    if (res < 0) {
+        wpa_printf(MSG_ERROR,
+                   "wired_send_eapol - packet len: %lu - failed: send: %s",
+                   (unsigned long)len, strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
 static void infwired_connect_to_pae_server(struct wpa_driver_infwired_data *drv)
 {
     unix_socket_block_till_connect(drv->common.sock, &drv->common.sockattr);
     wpa_printf(MSG_INFO, "INFWIRED: connected to port manager socket %s",
                drv->common.sockattr.sun_path);
 
+    // the first message to the external PAE manager is a list of existing
+    // stations
+    if (drv->common.ctx) {
+        struct hostapd_data *hapd = (struct hostapd_data*)drv->common.ctx;
+        ap_for_each_sta(hapd, infwired_send_sta_info, drv);
+    }
     eloop_register_read_sock(drv->common.sock,
                              handle_read,
                              drv,

@@ -283,6 +283,11 @@ struct sta_info {
 	unsigned int airtime_weight;
 	struct os_reltime backlogged_until;
 #endif /* CONFIG_AIRTIME_POLICY */
+
+#ifdef CONFIG_INF_WIRED_PAE
+	u8 mab;
+	u8 mab_auth;
+#endif
 };
 
 
@@ -358,5 +363,27 @@ void ap_sta_delayed_1x_auth_fail_disconnect(struct hostapd_data *hapd,
 					    struct sta_info *sta);
 int ap_sta_pending_delayed_1x_auth_fail_disconnect(struct hostapd_data *hapd,
 						   struct sta_info *sta);
+
+#ifdef CONFIG_INF_WIRED_PAE
+static inline void ap_sta_set_mab(struct sta_info *sta, u8 val)
+{	
+	sta->mab = val;
+}
+
+static inline u8 ap_sta_get_mab(struct sta_info *sta)
+{	
+	return sta->mab;
+}
+
+static inline void ap_sta_set_mab_auth(struct sta_info *sta, u8 val)
+{	
+	sta->mab_auth = val;
+}
+
+static inline u8 ap_sta_get_mab_auth(struct sta_info *sta)
+{	
+	return sta->mab_auth;
+}
+#endif
 
 #endif /* STA_INFO_H */
