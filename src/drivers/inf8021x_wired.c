@@ -56,25 +56,28 @@ struct wpa_driver_infwired_data {
 
 static int infwired_common_init_sockets(struct driver_infwired_common_data *cd);
 static void handle_read(int sock, void *eloop_ctx, void *sock_ctx);
+static void infwired_connect_to_pae_server(struct wpa_driver_infwired_data *drv);
 
-static void unix_socket_block_till_connect(int sk, struct sockaddr_un *skattr)
+static void unix_socket_reconnect(void *eloop_ctx, void *user_ctx)
 {
-    uint8_t connected = 0;
-    int ret = 0;
-    while (!connected) {
-        ret = 0;
-        ret = connect(sk,
-                      (struct sockaddr *)skattr,
-                      sizeof(struct sockaddr_un));
-        if (ret < 0) {
-            sleep(5);
-            continue;
-        }
+    struct wpa_driver_infwired_data *drv = 
+        (struct wpa_driver_infwired_data *)eloop_ctx;
 
-        connected = 1;
+    infwired_connect_to_pae_server(drv);
+}
+
+static int unix_try_connect(int sk, struct sockaddr_un *skattr)
+{
+    int ret = 0;
+    ret = connect(sk,
+                    (struct sockaddr *)skattr,
+                    sizeof(struct sockaddr_un));
+    if (ret < 0) {
+        wpa_printf(MSG_INFO, "INFWIRED: unable to connect to PAE manager");
+        return -1;
     }
 
-    return;
+    return 0;
 }
 
 static void handle_eapol_mode(void *ctx, unsigned char *buf, size_t len)
@@ -95,7 +98,9 @@ static void handle_eapol_mode(void *ctx, unsigned char *buf, size_t len)
 		event.new_sta.addr = sa;
         struct hostapd_data *hapd = (struct hostapd_data *)ctx;
         struct sta_info *sta = ap_get_sta(hapd, &hdr->src[0]);
-        if (sta && sta->eapol_sm->auth_pae_state == AUTH_PAE_AUTHENTICATED) {
+        if (sta &&
+            sta->eapol_sm &&
+            sta->eapol_sm->auth_pae_state == AUTH_PAE_AUTHENTICATED) {
             u8* eapol_hdr = (u8*)(hdr + 1);
             if (eapol_hdr[1] == 1) {
                 wpa_printf(MSG_INFO, "INFWIRED: PAE authencitcated, disconnecting");
@@ -123,12 +128,66 @@ static void handle_mab_mode(void *ctx, unsigned char *buf, size_t len)
 
     struct hostapd_data *hapd = ctx;
     struct radius_msg *msg;
-    int radiusid;
+    //int radiusid;
 	struct ieee8023_hdr *hdr;
     char identity[128] = {0};
-    size_t identitylen = ETH_ALEN;
-    char nullmac[ETH_ALEN] = {0};
+    //size_t identitylen = ETH_ALEN;
+    // char nullmac[ETH_ALEN] = {0};
+    // u8 is_new_sta = 0;
 
+    hdr = (struct ieee8023_hdr *) (buf + sizeof(struct infwired_paemsg_hdr));
+	os_snprintf(identity,
+                sizeof(identity),
+                RADIUS_ADDR_FORMAT,
+                MAC2STR(hdr->src));
+    struct sta_info *sta = ap_get_sta(hapd, hdr->src);
+    if (sta == NULL) {
+	    union wpa_event_data event;
+     	os_memset(&event, 0, sizeof(event));
+		event.new_sta.addr = &hdr->src[0];
+        sta = ap_sta_add(hapd, &hdr->src[0]);
+        if (!sta) {
+            wpa_printf(MSG_ERROR, "INFWIRED: error creating a station");
+            return;
+        }
+        ap_sta_set_mab(sta, 1);
+    }
+
+    const u8 msg1[2] = {0,1};
+    u32 session_timeout = 0;
+    uint32_t acct_interim_interval = 0;
+    struct vlan_description vlan_id;
+    struct hostapd_sta_wpa_psk_short *psk = NULL;
+    char *identity1 = NULL;
+    char *radius_cui = NULL;
+    int res = 0;
+
+    wpa_printf(MSG_INFO, "INFWIRED: Handle MAB mode, authenticating sta=%p, "MACSTR,
+               sta, MAC2STR(&hdr->src[0]));
+
+    hapd->conf->macaddr_acl = USE_EXTERNAL_RADIUS_AUTH;
+    res = hostapd_allowed_address(hapd,
+                                  &hdr->src[0],
+                                  msg1,
+                                  sizeof(msg),
+                                  &session_timeout,
+                                  &acct_interim_interval,
+                                  &vlan_id,
+                                  &psk,
+                                  &identity1,
+                                  &radius_cui,
+                                  0);
+    
+    wpa_printf(MSG_INFO, "INFWIRED: Handle MAB mode, authenticating sta=%p, "
+               "status=%d "MACSTR,
+               sta, res, MAC2STR(&hdr->src[0]));
+
+    return;
+
+#if 0
+    hapd->mab_acl_query.radius_id = radiusid;
+    memcpy(hapd->mab_acl_query.addr, hdr->src, ETH_ALEN);
+    hapd->mab_acl_query.next = NULL;
     if (!(hapd->radius)) {
         wpa_printf(MSG_WARNING, "INFWIRED: radius client not connected");
         return;
@@ -146,24 +205,6 @@ static void handle_mab_mode(void *ctx, unsigned char *buf, size_t len)
         radius_msg_free(msg);
         return;
 	}
-
-    hdr = (struct ieee8023_hdr *) (buf + sizeof(struct infwired_paemsg_hdr));
-	os_snprintf(identity,
-                sizeof(identity),
-                RADIUS_ADDR_FORMAT,
-                MAC2STR(hdr->src));
-    // add first and only station (when the query is empty)
-    if (memcmp(hapd->mab_acl_query.addr, nullmac, ETH_ALEN) == 0) {
-	    union wpa_event_data event;
-     	os_memset(&event, 0, sizeof(event));
-		event.new_sta.addr = &hdr->src[0];
-        struct sta_info *sta = ap_sta_add(hapd, &hdr->src[0]);
-        if (!sta) {
-            wpa_printf(MSG_ERROR, "INFWIRED: error creating a station");
-            return;
-        }
-        ap_sta_set_mab(sta, 1);
-    }
 
     if (!radius_msg_add_attr(msg, RADIUS_ATTR_USER_NAME,
                              (u8 *)identity, identitylen)) {
@@ -189,12 +230,10 @@ static void handle_mab_mode(void *ctx, unsigned char *buf, size_t len)
 		return;
 	}
 
-    hapd->mab_acl_query.radius_id = radiusid;
-    memcpy(hapd->mab_acl_query.addr, hdr->src, ETH_ALEN);
-    hapd->mab_acl_query.next = NULL;
     if (radius_client_send(hapd->radius, msg, RADIUS_AUTH, NULL) < 0) {
         radius_msg_free(msg);
     }
+#endif
 
     return;
 }
@@ -298,9 +337,19 @@ static int infwired_send_sta_info(struct hostapd_data *hapd,
 
 static void infwired_connect_to_pae_server(struct wpa_driver_infwired_data *drv)
 {
-    unix_socket_block_till_connect(drv->common.sock, &drv->common.sockattr);
+    int ret = unix_try_connect(drv->common.sock,
+                                             &drv->common.sockattr);
+    if (ret < 0) {
+        wpa_printf(MSG_INFO, "INFWIRED: unable to connect to PAE manager, "
+                  "retrying after 5s\n");
+        eloop_register_timeout(5, 0, unix_socket_reconnect, drv, NULL);
+        return;
+    }
+
     wpa_printf(MSG_INFO, "INFWIRED: connected to port manager socket %s",
                drv->common.sockattr.sun_path);
+
+    eloop_cancel_timeout(unix_socket_reconnect, drv, NULL);
 
     // the first message to the external PAE manager is a list of existing
     // stations
@@ -554,6 +603,39 @@ static int wpa_driver_infwired_sta_set_flags(void *priv, const u8 *addr,
     return 0;
 }
 
+static int wpa_driver_infwired_set_acl_auth(void *priv,
+                                           const u8* mac,
+                                           int accepted,
+                                           u32 timeout)
+{
+    struct wpa_driver_infwired_data *drv = priv;
+    struct hostapd_data *hapd = drv->common.ctx;
+	struct sta_info *sta = ap_get_sta(hapd, mac);
+	if (!sta) {
+		wpa_printf(MSG_ERROR, "INFWIRED: sta for " MACSTR "not found",
+				   MAC2STR(mac));
+		return 0;
+	}
+    ap_sta_set_mab_auth(sta, accepted);
+	ap_sta_set_authorized(hapd, sta, accepted);
+	ap_sta_set_mab_auth(sta, accepted);
+	hostapd_set_authorized(hapd, sta, accepted);
+	hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE8021X,
+			       HOSTAPD_LEVEL_INFO, "authorizing port");
+    return 0;
+}
+
+// TODO: need to implement a per station inactivity timer, poll this info
+// from the external PAE in a timeout loop
+static int driver_infwired_get_inact(void *priv, const u8 *addr)
+{
+    struct wpa_driver_infwired_data *drv = priv;
+    //TODO: MUTE
+    wpa_printf(MSG_INFO, "INFWIRED: Get Inactivity for ifname=%s addr=" MACSTR,
+               drv->common.ifname, MAC2STR(addr));
+    return -1;
+}
+
 const struct wpa_driver_ops wpa_driver_infwired_ops = {
     .name = "infwired",
     .desc = "Infiot 8021x Wired Ethernet driver",
@@ -563,8 +645,10 @@ const struct wpa_driver_ops wpa_driver_infwired_ops = {
     .get_ssid = driver_infwired_get_ssid,
     .get_bssid = driver_infwired_get_bssid,
     .get_capa = driver_infwired_get_capa,
+    .get_inact_sec = driver_infwired_get_inact,
     .sta_deauth = driver_infwired_set_deauth,
     .init = wpa_driver_infwired_init,
     .deinit = wpa_driver_infwired_deinit,
     .sta_set_flags = wpa_driver_infwired_sta_set_flags,
+    .set_radius_acl_auth = wpa_driver_infwired_set_acl_auth
 };

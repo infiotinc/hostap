@@ -516,13 +516,16 @@ hostapd_mab_recv_radius(struct radius_msg *msg, struct radius_msg *req,
 			const u8 *shared_secret, size_t shared_secret_len,
 			void *data)
 {
-	wpa_printf(MSG_INFO, 
-		   "INFWIRED: Received RADIUS Authentication message; code=%d\n",
-           radius_msg_get_hdr(msg)->code);
 	struct hostapd_data *hapd = data;
 	struct radius_hdr *hdr = radius_msg_get_hdr(msg);
 
 	struct hostapd_mab_query_data *query = &hapd->mab_acl_query;
+
+	wpa_printf(MSG_INFO, 
+		   "INFWIRED: Received RADIUS Authentication message for "
+		   MACSTR"; code=%d\n",
+		   MAC2STR(query->addr),
+           radius_msg_get_hdr(msg)->code);
 	if (query->radius_id != hdr->identifier) {
 		return RADIUS_RX_UNKNOWN;
 	}
@@ -716,11 +719,11 @@ int hostapd_acl_init(struct hostapd_data *hapd)
  */
 int hostapd_mab_init(struct hostapd_data *hapd)
 {
-#ifndef CONFIG_NO_RADIUS
-	if (radius_client_register(hapd->radius, RADIUS_AUTH,
-				   hostapd_mab_recv_radius, hapd))
-		return -1;
-#endif /* CONFIG_NO_RADIUS */
+// #ifndef CONFIG_NO_RADIUS
+// 	if (radius_client_register(hapd->radius, RADIUS_AUTH,
+// 				   hostapd_mab_recv_radius, hapd))
+// 		return -1;
+// #endif /* CONFIG_NO_RADIUS */
 
 	return 0;
 }

@@ -1221,7 +1221,7 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 			   int authorized)
 {
 	const u8 *dev_addr = NULL;
-	char buf[100];
+	char buf[256];
 #ifdef CONFIG_P2P
 	u8 addr[ETH_ALEN];
 	u8 ip_addr_buf[4];
@@ -1248,18 +1248,26 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 			    MAC2STR(sta->addr), MAC2STR(dev_addr));
 	else
 #endif /* CONFIG_P2P */
-	size_t sz = os_snprintf(buf, sizeof(buf), MACSTR" ", MAC2STR(sta->addr));
 	char *pbuf = buf;
-
+	char *pbufend = buf + sizeof(buf) - 1;
+	size_t sz = os_snprintf(pbuf, sizeof(buf), MACSTR" ", MAC2STR(sta->addr));
 	pbuf += sz;
-	wpa_printf(MSG_INFO, "INFWIRED: AUTH %s", buf);
+	
+	sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s ", hapd->conf->bridge);
+	pbuf += sz;
+
 	if (sta->eapol_sm) {
-		if (sta->eapol_sm->identity) {
+		if (sta->eapol_sm->identity &&
+			(pbuf + sta->eapol_sm->identity_len + 1) <= pbufend) {
 			memcpy(pbuf, sta->eapol_sm->identity, sta->eapol_sm->identity_len);
 			pbuf += sta->eapol_sm->identity_len;
 			*pbuf = '\0';
+			pbuf++;
+			wpa_printf(MSG_INFO, "INFWIRED: AUTH sending username %s", buf);
 		}
 	}
+	
+	wpa_printf(MSG_INFO, "INFWIRED: AUTH sending msg %s", buf);
 	if (hapd->sta_authorized_cb)
 		hapd->sta_authorized_cb(hapd->sta_authorized_cb_ctx,
 					sta->addr, authorized, dev_addr);
