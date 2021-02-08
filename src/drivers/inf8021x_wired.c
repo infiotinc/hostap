@@ -10,6 +10,8 @@
 #include "eloop.h"
 #include <sys/types.h>
 #include <sys/un.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
 #include "radius/radius.h"
 #include "radius/radius_client.h"
 #include "inf8021x_wired.h"
@@ -278,6 +280,63 @@ static void infwired_data_sock_close(struct wpa_driver_infwired_data *drv)
     return;
 }
 
+static int infwired_ifconfig_helper(const char *if_name, int up)
+{
+	int fd;
+	struct ifreq ifr;
+
+	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		wpa_printf(MSG_ERROR, "VLAN: %s: socket(AF_INET,SOCK_STREAM) "
+			   "failed: %s", __func__, strerror(errno));
+		return -1;
+	}
+
+	os_memset(&ifr, 0, sizeof(ifr));
+	os_strlcpy(ifr.ifr_name, if_name, IFNAMSIZ);
+
+	if (ioctl(fd, SIOCGIFFLAGS, &ifr) != 0) {
+		wpa_printf(MSG_ERROR, "VLAN: %s: ioctl(SIOCGIFFLAGS) failed "
+			   "for interface %s: %s",
+			   __func__, if_name, strerror(errno));
+		close(fd);
+		return -1;
+	}
+
+	if (up)
+		ifr.ifr_flags |= IFF_UP;
+	else
+		ifr.ifr_flags &= ~IFF_UP;
+
+	if (ioctl(fd, SIOCSIFFLAGS, &ifr) != 0) {
+		wpa_printf(MSG_ERROR, "VLAN: %s: ioctl(SIOCSIFFLAGS) failed "
+			   "for interface %s (up=%d): %s",
+			   __func__, if_name, up, strerror(errno));
+		close(fd);
+		return -1;
+	}
+
+	close(fd);
+	return 0;
+}
+static int infwired_reset_vlan_member_links(struct hostapd_data *hapd)
+{
+    char **vlan_members = hapd->conf->vlan_members;
+    int ii = 0;
+
+    if (vlan_members == NULL || hapd->conf->num_vlan_members == 0) {
+        wpa_printf(MSG_INFO, "INFWIRED: VLAN members are empty");
+        return -1;
+    }
+
+    for (ii = 0; ii < hapd->conf->num_vlan_members; ii++) {
+        wpa_printf(MSG_INFO, "INFWIRED: resetting link for vlan member %s",
+                   vlan_members[ii]);
+        infwired_ifconfig_helper((const char *)vlan_members[ii], 0);
+        infwired_ifconfig_helper((const char *)vlan_members[ii], 1);
+    }
+    return 0;
+}
+
 static int infwired_send_sta_info(struct hostapd_data *hapd,
                                   struct sta_info *sta,
                                   void *ctx)
@@ -338,7 +397,7 @@ static int infwired_send_sta_info(struct hostapd_data *hapd,
 static void infwired_connect_to_pae_server(struct wpa_driver_infwired_data *drv)
 {
     int ret = unix_try_connect(drv->common.sock,
-                                             &drv->common.sockattr);
+                               &drv->common.sockattr);
     if (ret < 0) {
         wpa_printf(MSG_INFO, "INFWIRED: unable to connect to PAE manager, "
                   "retrying after 5s\n");
@@ -350,6 +409,8 @@ static void infwired_connect_to_pae_server(struct wpa_driver_infwired_data *drv)
                drv->common.sockattr.sun_path);
 
     eloop_cancel_timeout(unix_socket_reconnect, drv, NULL);
+
+    infwired_reset_vlan_member_links(drv->common.ctx);
 
     // the first message to the external PAE manager is a list of existing
     // stations

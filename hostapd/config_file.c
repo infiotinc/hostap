@@ -2364,6 +2364,80 @@ fail:
 }
 #endif /* CONFIG_DPP2 */
 
+#ifdef CONFIG_INF_WIRED_PAE
+static void inf_pae_wired_print_vlan_members(struct hostapd_bss_config *bss)
+{
+	int ii = 0;
+	for (ii = 0; ii < bss->num_vlan_members; ii++) {
+		wpa_printf(MSG_INFO, "INFWIRED vlan member %d is %s",
+				   ii,
+				   bss->vlan_members[ii]);
+	}
+	return;
+}
+
+static int inf_pae_wired_parse_vlan_members(struct hostapd_bss_config *bss,
+											char *pos,
+											int line)
+{
+	char *tok_prev, *tok_start;
+	int num_vlan_members = 0, j = 0, vlan_len = 0;
+	int idx = 0;
+
+	bss->vlan_members = NULL;
+
+	if (strlen(pos) == 0) {
+		wpa_printf(MSG_WARNING, "INFWIRED: VLAN members is empty");
+		return 0;
+	}
+
+	tok_prev = pos;
+	num_vlan_members = 1;
+	while ((tok_prev = os_strchr(tok_prev, ','))) {
+		num_vlan_members++;
+		tok_prev++;
+	}
+
+	bss->vlan_members = os_calloc(sizeof(char *), num_vlan_members + 1);
+	if (bss->vlan_members == NULL) {
+		wpa_printf(MSG_WARNING, "INFWIRED: unable to allocate memory for "
+				   "VLAN members, ignoring reading the VLAN members");
+		return 0;
+	}
+	bss->num_vlan_members = num_vlan_members;
+
+	tok_prev = pos;
+	char **vlan_members = bss->vlan_members;
+	for (j = 0; j < num_vlan_members; j++) {
+		tok_start = os_strchr(tok_prev, ',');
+		if (tok_start) {
+			vlan_len = tok_start - tok_prev;
+			vlan_members[idx] = os_calloc(1, vlan_len + 1);
+			if (vlan_members[idx] == NULL) {
+				wpa_printf(MSG_WARNING, "INFWIRED: unable to parse a "
+						   "VLAN member (j=%d), skipping", j);
+				continue;
+			}
+			os_memcpy(vlan_members[idx], tok_prev, vlan_len);
+			tok_prev = ++tok_start;
+			idx++;
+		} else {
+			vlan_len = os_strlen(tok_prev);
+			vlan_members[idx] = os_calloc(1, vlan_len + 1);
+			if (vlan_members[idx] == NULL) {
+				wpa_printf(MSG_WARNING, "INFWIRED: unable to parse a "
+						   "VLAN member (j=%d), skipping", j);
+				continue;
+			}
+			os_memcpy(vlan_members[idx], tok_prev, vlan_len);
+			idx++;
+		}
+	}
+
+	inf_pae_wired_print_vlan_members(bss);
+	return 0;
+}
+#endif
 
 static int hostapd_config_fill(struct hostapd_config *conf,
 			       struct hostapd_bss_config *bss,
@@ -4509,6 +4583,8 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 #ifdef CONFIG_INF_WIRED_PAE
 	} else if (os_strcmp(buf, "mab") == 0) {
 		conf->mab = atoi(pos);
+	} else if (os_strcmp(buf, "vlan_members") == 0) {
+		inf_pae_wired_parse_vlan_members(bss, pos, line);
 #endif
 	} else {
 		wpa_printf(MSG_ERROR,

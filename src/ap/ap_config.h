@@ -273,6 +273,10 @@ struct hostapd_bss_config {
 	char bridge[IFNAMSIZ + 1];
 	char vlan_bridge[IFNAMSIZ + 1];
 	char wds_bridge[IFNAMSIZ + 1];
+#ifdef CONFIG_INF_WIRED_PAE
+	char **vlan_members;
+	int num_vlan_members;
+#endif
 
 	enum hostapd_logger_level logger_syslog_level, logger_stdout_level;
 

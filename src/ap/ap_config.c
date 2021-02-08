@@ -660,6 +660,28 @@ static void hostapd_dpp_controller_conf_free(struct dpp_controller_conf *conf)
 }
 #endif /* CONFIG_DPP2 */
 
+#ifdef CONFIG_INF_WIRED_PAE
+static void hostapd_config_free_bss_vlan_members(struct hostapd_bss_config *bss)
+{
+	int ii = 0;
+	if (bss->num_vlan_members == 0) {
+		return;
+	}
+
+	if (bss->vlan_members == NULL) {
+		wpa_printf(MSG_WARNING, "INFWIRED: vlan_members is NULL when "
+				   "num_vlan_members is %d",
+				   bss->num_vlan_members);
+		return;
+	}
+	for (ii = 0; ii < bss->num_vlan_members; ii++) {
+		free(bss->vlan_members[ii]);
+	}
+
+	free(bss->vlan_members);
+	return;
+}
+#endif
 
 void hostapd_config_free_bss(struct hostapd_bss_config *conf)
 {
@@ -719,6 +741,9 @@ void hostapd_config_free_bss(struct hostapd_bss_config *conf)
 	os_free(conf->radius);
 	os_free(conf->radius_das_shared_secret);
 	hostapd_config_free_vlan(conf);
+#ifdef CONFIG_INF_WIRED_PAE
+	hostapd_config_free_bss_vlan_members(conf);
+#endif
 	os_free(conf->time_zone);
 
 #ifdef CONFIG_IEEE80211R_AP
