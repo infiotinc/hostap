@@ -12,6 +12,8 @@
 #include <sys/un.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <linux/ethtool.h>
+#include <linux/sockios.h>
 #include "radius/radius.h"
 #include "radius/radius_client.h"
 #include "inf8021x_wired.h"
@@ -318,6 +320,44 @@ static int infwired_ifconfig_helper(const char *if_name, int up)
 	close(fd);
 	return 0;
 }
+
+// restart auto-neg to flap the link. this is more deterministic
+// way of flapping a link especially in HW where PPC mode is set
+// which auto detects carrier presence and does not allow software
+// based resets
+static int infwired_link_nway_reset(const char *if_name)
+{
+	int fd;
+	struct ifreq ifr;
+    struct ethtool_value edata;
+
+	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		wpa_printf(MSG_ERROR, "INFWIRED: %s: socket(AF_INET,SOCK_STREAM) "
+			   "failed: %s", __func__, strerror(errno));
+		return -1;
+	}
+
+	os_memset(&ifr, 0, sizeof(ifr));
+	os_strlcpy(ifr.ifr_name, if_name, IFNAMSIZ);
+
+    edata.cmd = ETHTOOL_NWAY_RST;
+    edata.data = 0;
+    ifr.ifr_data = (char *)(&edata);
+	if (ioctl(fd, SIOCETHTOOL, &ifr) != 0) {
+		wpa_printf(MSG_ERROR, "INFWIRED: %s: ioctl(SIOCETHTOOL) failed "
+			   "for interface %s: %s",
+			   __func__, if_name, strerror(errno));
+		close(fd);
+		return -1;
+	}
+
+    wpa_printf(MSG_INFO, "INFWIRED: %s: ioctl(SIOCSIFFLAGS) reset "
+            "done for interface %s",
+            __func__, if_name);
+	close(fd);
+	return 0;
+}
+
 static int infwired_reset_vlan_member_links(struct hostapd_data *hapd)
 {
     char **vlan_members = hapd->conf->vlan_members;
@@ -331,8 +371,9 @@ static int infwired_reset_vlan_member_links(struct hostapd_data *hapd)
     for (ii = 0; ii < hapd->conf->num_vlan_members; ii++) {
         wpa_printf(MSG_INFO, "INFWIRED: resetting link for vlan member %s",
                    vlan_members[ii]);
-        infwired_ifconfig_helper((const char *)vlan_members[ii], 0);
-        infwired_ifconfig_helper((const char *)vlan_members[ii], 1);
+        //infwired_ifconfig_helper((const char *)vlan_members[ii], 0);
+        //infwired_ifconfig_helper((const char *)vlan_members[ii], 1);
+        infwired_link_nway_reset((const char *)vlan_members[ii]);
     }
     return 0;
 }
