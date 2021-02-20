@@ -1253,7 +1253,11 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 	size_t sz = os_snprintf(pbuf, sizeof(buf), MACSTR" ", MAC2STR(sta->addr));
 	pbuf += sz;
 	
-	sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s ", hapd->conf->bridge);
+	if (strlen(hapd->conf->bridge) > 0) {
+		sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s ", hapd->conf->bridge);
+	} else {
+		sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s ", "__ignore__");
+	}
 	pbuf += sz;
 
 	if (sta->eapol_sm) {
@@ -1264,6 +1268,8 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 			*pbuf = '\0';
 			pbuf++;
 			wpa_printf(MSG_INFO, "INFWIRED: AUTH sending username %s", buf);
+		} else {
+			sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s", "__ignore__");
 		}
 	}
 	
