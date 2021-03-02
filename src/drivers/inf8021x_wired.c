@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <sys/ioctl.h>
+#include <syslog.h>
 #include <net/if.h>
 #include <linux/ethtool.h>
 #include <linux/sockios.h>
@@ -62,6 +63,30 @@ static int infwired_common_init_sockets(struct driver_infwired_common_data *cd);
 static void handle_read(int sock, void *eloop_ctx, void *sock_ctx);
 static void infwired_connect_to_pae_server(struct wpa_driver_infwired_data *drv);
 
+static int syslog_priority(int level)
+{
+	switch (level) {
+	case MSG_MSGDUMP:
+	case MSG_DEBUG:
+		return LOG_DEBUG;
+	case MSG_INFO:
+		return LOG_NOTICE;
+	case MSG_WARNING:
+		return LOG_WARNING;
+	case MSG_ERROR:
+		return LOG_ERR;
+	}
+	return LOG_INFO;
+}
+
+void inf_wpa_printf(int level, const char *fmt, ...)
+{
+    va_list ap;
+
+	va_start(ap, fmt);
+    vsyslog(syslog_priority(level), fmt, ap);
+}
+
 static void unix_socket_reconnect(void *eloop_ctx, void *user_ctx)
 {
     struct wpa_driver_infwired_data *drv = 
@@ -77,7 +102,7 @@ static int unix_try_connect(int sk, struct sockaddr_un *skattr)
                     (struct sockaddr *)skattr,
                     sizeof(struct sockaddr_un));
     if (ret < 0) {
-        wpa_printf(MSG_INFO, "INFWIRED: unable to connect to PAE manager");
+        inf_wpa_printf(MSG_INFO, "INFWIRED: unable to connect to PAE manager\n");
         return -1;
     }
 
@@ -86,7 +111,7 @@ static int unix_try_connect(int sk, struct sockaddr_un *skattr)
 
 static void handle_eapol_mode(void *ctx, unsigned char *buf, size_t len)
 {
-    wpa_printf(MSG_INFO, "INFWIRED: Handle EAPOL mode");
+    inf_wpa_printf(MSG_INFO, "INFWIRED: Handle EAPOL mode\n");
 	struct ieee8023_hdr *hdr;
 	u8 *pos, *sa;
 	size_t left;
@@ -96,7 +121,7 @@ static void handle_eapol_mode(void *ctx, unsigned char *buf, size_t len)
 
 	switch (ntohs(hdr->ethertype)) {
 	case ETH_P_PAE:
-		wpa_printf(MSG_MSGDUMP, "Received EAPOL packet");
+		inf_wpa_printf(MSG_MSGDUMP, "Received EAPOL packet\n");
 		sa = hdr->src;
 		os_memset(&event, 0, sizeof(event));
 		event.new_sta.addr = sa;
@@ -107,7 +132,7 @@ static void handle_eapol_mode(void *ctx, unsigned char *buf, size_t len)
             sta->eapol_sm->auth_pae_state == AUTH_PAE_AUTHENTICATED) {
             u8* eapol_hdr = (u8*)(hdr + 1);
             if (eapol_hdr[1] == 1) {
-                wpa_printf(MSG_INFO, "INFWIRED: PAE authencitcated, disconnecting");
+                inf_wpa_printf(MSG_INFO, "INFWIRED: PAE authencitcated, disconnecting\n");
                 ap_sta_deauthenticate(hapd, sta, WLAN_REASON_UNSPECIFIED);
             }
         }
@@ -119,7 +144,7 @@ static void handle_eapol_mode(void *ctx, unsigned char *buf, size_t len)
 		break;
 
 	default:
-		wpa_printf(MSG_DEBUG, "Unknown ethertype 0x%04x in data frame",
+		inf_wpa_printf(MSG_DEBUG, "Unknown ethertype 0x%04x in data frame\n",
 			   ntohs(hdr->ethertype));
 		break;
 	}
@@ -128,7 +153,7 @@ static void handle_eapol_mode(void *ctx, unsigned char *buf, size_t len)
 
 static void handle_mab_mode(void *ctx, unsigned char *buf, size_t len)
 {
-    wpa_printf(MSG_INFO, "INFWIRED: Handle MAB mode");
+    inf_wpa_printf(MSG_INFO, "INFWIRED: Handle MAB mode\n");
 
     struct hostapd_data *hapd = ctx;
     struct radius_msg *msg;
@@ -151,7 +176,7 @@ static void handle_mab_mode(void *ctx, unsigned char *buf, size_t len)
 		event.new_sta.addr = &hdr->src[0];
         sta = ap_sta_add(hapd, &hdr->src[0]);
         if (!sta) {
-            wpa_printf(MSG_ERROR, "INFWIRED: error creating a station");
+            inf_wpa_printf(MSG_ERROR, "INFWIRED: error creating a station\n");
             return;
         }
         ap_sta_set_mab(sta, 1);
@@ -166,7 +191,8 @@ static void handle_mab_mode(void *ctx, unsigned char *buf, size_t len)
     char *radius_cui = NULL;
     int res = 0;
 
-    wpa_printf(MSG_INFO, "INFWIRED: Handle MAB mode, authenticating sta=%p, "MACSTR,
+    inf_wpa_printf(MSG_INFO, "INFWIRED: Handle MAB mode, authenticating "
+               "sta=%p, "MACSTR"\n",
                sta, MAC2STR(&hdr->src[0]));
 
     hapd->conf->macaddr_acl = USE_EXTERNAL_RADIUS_AUTH;
@@ -182,8 +208,8 @@ static void handle_mab_mode(void *ctx, unsigned char *buf, size_t len)
                                   &radius_cui,
                                   0);
     
-    wpa_printf(MSG_INFO, "INFWIRED: Handle MAB mode, authenticating sta=%p, "
-               "status=%d "MACSTR,
+    inf_wpa_printf(MSG_INFO, "INFWIRED: Handle MAB mode, authenticating sta=%p, "
+               "status=%d "MACSTR"\n",
                sta, res, MAC2STR(&hdr->src[0]));
 
     return;
@@ -193,19 +219,19 @@ static void handle_mab_mode(void *ctx, unsigned char *buf, size_t len)
     memcpy(hapd->mab_acl_query.addr, hdr->src, ETH_ALEN);
     hapd->mab_acl_query.next = NULL;
     if (!(hapd->radius)) {
-        wpa_printf(MSG_WARNING, "INFWIRED: radius client not connected");
+        inf_wpa_printf(MSG_WARNING, "INFWIRED: radius client not connected");
         return;
     }
 
     radiusid = radius_client_get_id(hapd->radius);
 	msg = radius_msg_new(RADIUS_CODE_ACCESS_REQUEST, radiusid);
 	if (msg == NULL) {
-		wpa_printf(MSG_ERROR, "Could not create new RADIUS packet");
+		inf_wpa_printf(MSG_ERROR, "Could not create new RADIUS packet");
 		return;
 	}
 
 	if (radius_msg_make_authenticator(msg) < 0) {
-		wpa_printf(MSG_ERROR, "Could not make Request Authenticator");
+		inf_wpa_printf(MSG_ERROR, "Could not make Request Authenticator");
         radius_msg_free(msg);
         return;
 	}
@@ -230,7 +256,7 @@ static void handle_mab_mode(void *ctx, unsigned char *buf, size_t len)
 		        MAC2STR(hdr->src));
 	if (!radius_msg_add_attr(msg, RADIUS_ATTR_CALLING_STATION_ID,
 				 (u8 *) identity, os_strlen(identity))) {
-		wpa_printf(MSG_ERROR, "Could not add Calling-Station-Id");
+		inf_wpa_printf(MSG_ERROR, "Could not add Calling-Station-Id");
 		return;
 	}
 
@@ -244,14 +270,14 @@ static void handle_mab_mode(void *ctx, unsigned char *buf, size_t len)
 
 static void handle_data(void *ctx, unsigned char *buf, size_t len)
 {
-    wpa_printf(MSG_INFO, "data %p received size %lu", buf, len);
+    inf_wpa_printf(MSG_INFO, "data %p received size %lu\n", buf, len);
 
     struct infwired_paemsg_hdr *fullhdr;
 
 	/* must contain at least ieee8023_hdr 6 byte source, 6 byte dest,
 	 * 2 byte ethertype */
 	if (len < 14) {
-		wpa_printf(MSG_MSGDUMP, "handle_data: too short (%lu)",
+		inf_wpa_printf(MSG_MSGDUMP, "handle_data: too short (%lu)\n",
 			   (unsigned long) len);
 		return;
 	}
@@ -288,8 +314,8 @@ static int infwired_ifconfig_helper(const char *if_name, int up)
 	struct ifreq ifr;
 
 	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		wpa_printf(MSG_ERROR, "VLAN: %s: socket(AF_INET,SOCK_STREAM) "
-			   "failed: %s", __func__, strerror(errno));
+		inf_wpa_printf(MSG_ERROR, "VLAN: %s: socket(AF_INET,SOCK_STREAM) "
+			   "failed: %s\n", __func__, strerror(errno));
 		return -1;
 	}
 
@@ -297,8 +323,8 @@ static int infwired_ifconfig_helper(const char *if_name, int up)
 	os_strlcpy(ifr.ifr_name, if_name, IFNAMSIZ);
 
 	if (ioctl(fd, SIOCGIFFLAGS, &ifr) != 0) {
-		wpa_printf(MSG_ERROR, "VLAN: %s: ioctl(SIOCGIFFLAGS) failed "
-			   "for interface %s: %s",
+		inf_wpa_printf(MSG_ERROR, "VLAN: %s: ioctl(SIOCGIFFLAGS) failed "
+			   "for interface %s: %s\n",
 			   __func__, if_name, strerror(errno));
 		close(fd);
 		return -1;
@@ -310,8 +336,8 @@ static int infwired_ifconfig_helper(const char *if_name, int up)
 		ifr.ifr_flags &= ~IFF_UP;
 
 	if (ioctl(fd, SIOCSIFFLAGS, &ifr) != 0) {
-		wpa_printf(MSG_ERROR, "VLAN: %s: ioctl(SIOCSIFFLAGS) failed "
-			   "for interface %s (up=%d): %s",
+		inf_wpa_printf(MSG_ERROR, "VLAN: %s: ioctl(SIOCSIFFLAGS) failed "
+			   "for interface %s (up=%d): %s\n",
 			   __func__, if_name, up, strerror(errno));
 		close(fd);
 		return -1;
@@ -332,8 +358,8 @@ static int infwired_link_nway_reset(const char *if_name)
     struct ethtool_value edata;
 
 	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		wpa_printf(MSG_ERROR, "INFWIRED: %s: socket(AF_INET,SOCK_STREAM) "
-			   "failed: %s", __func__, strerror(errno));
+		inf_wpa_printf(MSG_ERROR, "INFWIRED: %s: socket(AF_INET,SOCK_STREAM) "
+			   "failed: %s\n", __func__, strerror(errno));
 		return -1;
 	}
 
@@ -344,15 +370,15 @@ static int infwired_link_nway_reset(const char *if_name)
     edata.data = 0;
     ifr.ifr_data = (char *)(&edata);
 	if (ioctl(fd, SIOCETHTOOL, &ifr) != 0) {
-		wpa_printf(MSG_ERROR, "INFWIRED: %s: ioctl(SIOCETHTOOL) failed "
-			   "for interface %s: %s",
+		inf_wpa_printf(MSG_ERROR, "INFWIRED: %s: ioctl(SIOCETHTOOL) failed "
+			   "for interface %s: %s\n",
 			   __func__, if_name, strerror(errno));
 		close(fd);
 		return -1;
 	}
 
-    wpa_printf(MSG_INFO, "INFWIRED: %s: ioctl(SIOCSIFFLAGS) reset "
-            "done for interface %s",
+    inf_wpa_printf(MSG_INFO, "INFWIRED: %s: ioctl(SIOCSIFFLAGS) reset "
+            "done for interface %s\n",
             __func__, if_name);
 	close(fd);
 	return 0;
@@ -364,12 +390,12 @@ static int infwired_reset_vlan_member_links(struct hostapd_data *hapd)
     int ii = 0;
 
     if (vlan_members == NULL || hapd->conf->num_vlan_members == 0) {
-        wpa_printf(MSG_INFO, "INFWIRED: VLAN members are empty");
+        inf_wpa_printf(MSG_INFO, "INFWIRED: VLAN members are empty\n");
         return -1;
     }
 
     for (ii = 0; ii < hapd->conf->num_vlan_members; ii++) {
-        wpa_printf(MSG_INFO, "INFWIRED: resetting link for vlan member %s",
+        inf_wpa_printf(MSG_INFO, "INFWIRED: resetting link for vlan member %s\n",
                    vlan_members[ii]);
         //infwired_ifconfig_helper((const char *)vlan_members[ii], 0);
         //infwired_ifconfig_helper((const char *)vlan_members[ii], 1);
@@ -391,8 +417,8 @@ static int infwired_send_sta_info(struct hostapd_data *hapd,
     struct wpa_driver_infwired_data *drv = ctx;
 
     if (sta->eapol_sm) {
-        wpa_printf(MSG_INFO, "INFWIRED: Sending STA info - "
-                   "ifname=%s addr=" MACSTR "auth_state=%d",
+        inf_wpa_printf(MSG_INFO, "INFWIRED: Sending STA info - "
+                   "ifname=%s addr=" MACSTR "auth_state=%d\n",
                    drv->common.ifname,
                    MAC2STR(sta->addr),
                    sta->eapol_sm->auth_pae_state);
@@ -405,8 +431,8 @@ static int infwired_send_sta_info(struct hostapd_data *hapd,
     len = sizeof(*fullhdr) + sizeof(struct infwired_auth_data);
     buf = os_zalloc(len);
     if (buf == NULL) {
-        wpa_printf(MSG_INFO,
-                   "malloc() failed for wired_send_eapol(len=%lu)",
+        inf_wpa_printf(MSG_INFO,
+                   "malloc() failed for wired_send_eapol(len=%lu)\n",
                    (unsigned long)len);
         return -1;
     }
@@ -416,8 +442,8 @@ static int infwired_send_sta_info(struct hostapd_data *hapd,
     authdata = (struct infwired_auth_data *)(buf + sizeof(*fullhdr));
     authdata->iad_auth = authorized;
     memcpy(authdata->iad_sta, sta->addr, ETH_ALEN);
-    wpa_printf(MSG_INFO, "INFWIRED: Sending STA info - ifname=%s addr=" MACSTR
-		   " auth_state=0x%x authorized=%d",
+    inf_wpa_printf(MSG_INFO, "INFWIRED: Sending STA info - ifname=%s addr=" MACSTR
+		   " auth_state=0x%x authorized=%d\n",
 		   drv->common.ifname,
            MAC2STR(sta->addr),
 		   auth_state,
@@ -426,8 +452,8 @@ static int infwired_send_sta_info(struct hostapd_data *hapd,
     os_free(buf);
 
     if (res < 0) {
-        wpa_printf(MSG_ERROR,
-                   "wired_send_eapol - packet len: %lu - failed: send: %s",
+        inf_wpa_printf(MSG_ERROR,
+                   "wired_send_eapol - packet len: %lu - failed: send: %s\n",
                    (unsigned long)len, strerror(errno));
         return -1;
     }
@@ -440,13 +466,13 @@ static void infwired_connect_to_pae_server(struct wpa_driver_infwired_data *drv)
     int ret = unix_try_connect(drv->common.sock,
                                &drv->common.sockattr);
     if (ret < 0) {
-        wpa_printf(MSG_INFO, "INFWIRED: unable to connect to PAE manager, "
+        inf_wpa_printf(MSG_INFO, "INFWIRED: unable to connect to PAE manager, "
                   "retrying after 5s\n");
         eloop_register_timeout(5, 0, unix_socket_reconnect, drv, NULL);
         return;
     }
 
-    wpa_printf(MSG_INFO, "INFWIRED: connected to port manager socket %s",
+    inf_wpa_printf(MSG_INFO, "INFWIRED: connected to port manager socket %s\n",
                drv->common.sockattr.sun_path);
 
     eloop_cancel_timeout(unix_socket_reconnect, drv, NULL);
@@ -474,21 +500,21 @@ static void handle_read(int sock, void *eloop_ctx, void *sock_ctx)
 
 	len = recv(sock, buf, sizeof(buf), 0);
 	if (len < 0) {
-		wpa_printf(MSG_ERROR, "INFWIRED recv: %s", strerror(errno));
+		inf_wpa_printf(MSG_ERROR, "INFWIRED recv: %s\n", strerror(errno));
 		return;
 	}
 
     if (len == 0) {
-        wpa_printf(MSG_ERROR, "INFWIRED: connection to PAE reset err %s",
+        inf_wpa_printf(MSG_ERROR, "INFWIRED: connection to PAE reset err %s\n",
                    strerror(errno));
         infwired_data_sock_close(drv);
         infwired_common_init_sockets(&drv->common);
-        wpa_printf(MSG_INFO, "reconnceting to the external PAE");
+        inf_wpa_printf(MSG_INFO, "reconnceting to the external PAE");
         infwired_connect_to_pae_server(drv);
         return;        
     }
 
-    wpa_printf(MSG_INFO, "INFWIRED: recieved data from PAEMgr len=%d", len);
+    inf_wpa_printf(MSG_INFO, "INFWIRED: recieved data from PAEMgr len=%d\n", len);
 	handle_data(drv->common.ctx, buf, len);
 }
 
@@ -497,7 +523,7 @@ static int infwired_common_init_sockets(struct driver_infwired_common_data *cd)
     cd->sock = -1;
     cd->sock = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     if (cd->sock < 0) {
-        wpa_printf(MSG_ERROR, "could not open socket to port manager err=%d",
+        inf_wpa_printf(MSG_ERROR, "could not open socket to port manager err=%d\n",
                    errno);
         return -1;
     }
@@ -508,7 +534,7 @@ static int infwired_common_init_sockets(struct driver_infwired_common_data *cd)
              sizeof(cd->sockattr.sun_path) - 1,
              "%s%s",
              INFWIRED_DSOCK_BASE, cd->ifname);
-    wpa_printf(MSG_INFO, "INFWIRED: opening socket to port manager %s",
+    inf_wpa_printf(MSG_INFO, "INFWIRED: opening socket to port manager %s\n",
                cd->sockattr.sun_path);
 
     return 0;
@@ -528,12 +554,12 @@ static void *infwired_driver_hapd_init(struct hostapd_data *hapd,
 {
     struct wpa_driver_infwired_data *drv = NULL;
 
-    wpa_printf(MSG_INFO, "INFWIRED: Initializing hostapd infwired driver");
+    inf_wpa_printf(MSG_INFO, "INFWIRED: Initializing hostapd infwired driver\n");
 
     drv = os_zalloc(sizeof(struct wpa_driver_infwired_data));
     if (drv == NULL) {
-        wpa_printf(MSG_INFO,
-                   "INFWIRED: Could not allocate memory for wired driver data");
+        inf_wpa_printf(MSG_INFO,
+                   "INFWIRED: Could not allocate memory for wired driver data\n");
         return NULL;
     }
 
@@ -586,7 +612,7 @@ static int infwired_send_eapol(void *priv, const u8 *addr,
                                const u8 *data, size_t data_len, int encrypt,
                                const u8 *own_addr, u32 flags)
 {
-    wpa_printf(MSG_INFO, "INFWIRED: send EAPOL data len=%lu", data_len);
+    inf_wpa_printf(MSG_INFO, "INFWIRED: send EAPOL data len=%lu\n", data_len);
     struct wpa_driver_infwired_data *drv = priv;
     struct infwired_paemsg_hdr *fullhdr;
     u8 *buf;
@@ -597,8 +623,8 @@ static int infwired_send_eapol(void *priv, const u8 *addr,
     len = sizeof(*fullhdr) + sizeof(struct ieee8023_hdr) + data_len;
     buf = os_zalloc(len);
     if (buf == NULL) {
-        wpa_printf(MSG_INFO,
-                   "malloc() failed for wired_send_eapol(len=%lu)",
+        inf_wpa_printf(MSG_INFO,
+                   "malloc() failed for wired_send_eapol(len=%lu)\n",
                    (unsigned long)len);
         return -1;
     }
@@ -620,8 +646,8 @@ static int infwired_send_eapol(void *priv, const u8 *addr,
     os_free(buf);
 
     if (res < 0) {
-        wpa_printf(MSG_ERROR,
-                   "wired_send_eapol - packet len: %lu - failed: send: %s",
+        inf_wpa_printf(MSG_ERROR,
+                   "wired_send_eapol - packet len: %lu - failed: send: %s\n",
                    (unsigned long)len, strerror(errno));
     }
 
@@ -633,7 +659,30 @@ static int driver_infwired_set_deauth(void *priv,
 			u16 reason)
 {
     struct wpa_driver_infwired_data *drv = priv;
-    wpa_printf(MSG_INFO, "INFWIRED: deauthenticating interface %s",
+    struct infwired_paemsg_hdr *fullhdr;
+    struct infwired_auth_data *authdata;
+    u8 *buf;
+    size_t len;
+    
+    len = sizeof(*fullhdr) + sizeof(struct infwired_auth_data);
+    buf = os_zalloc(len);
+    if (buf == NULL) {
+        inf_wpa_printf(MSG_INFO,
+                   "malloc() failed for wired_send_eapol(len=%lu)\n",
+                   (unsigned long)len);
+        return -1;
+    }
+    fullhdr = (struct infwired_paemsg_hdr *)buf;
+    fullhdr->paem_msgtype = INFWIRED_MSG_TYPE_AUTH_DATA;
+    authdata = (struct infwired_auth_data *)(buf + sizeof(*fullhdr));
+    authdata->iad_auth = 0;
+    memcpy(authdata->iad_sta, addr, ETH_ALEN);
+    int res = send(drv->common.sock, (u8 *)buf, len, 0);
+    os_free(buf);
+
+    inf_wpa_printf(MSG_INFO, "INFWIRED: deauthenticating sta="MACSTR
+               " on interface %s\n",
+               MAC2STR(addr),
                drv->common.ifname);
     return 0;
 }
@@ -646,7 +695,7 @@ static void *wpa_driver_infwired_init(void *ctx, const char *ifname)
     if (drv == NULL)
         return NULL;
 
-    wpa_printf(MSG_INFO, "Initializing WPA infwired driver");
+    inf_wpa_printf(MSG_INFO, "Initializing WPA infwired driver\n");
     // if (driver_wired_init_common(&drv->common, ifname, ctx) < 0) {
     // 	os_free(drv);
     // 	return NULL;
@@ -678,8 +727,8 @@ static int wpa_driver_infwired_sta_set_flags(void *priv, const u8 *addr,
     len = sizeof(*fullhdr) + sizeof(struct infwired_auth_data);
     buf = os_zalloc(len);
     if (buf == NULL) {
-        wpa_printf(MSG_INFO,
-                   "malloc() failed for wired_send_eapol(len=%lu)",
+        inf_wpa_printf(MSG_INFO,
+                   "malloc() failed for wired_send_eapol(len=%lu)\n",
                    (unsigned long)len);
         return -1;
     }
@@ -689,16 +738,16 @@ static int wpa_driver_infwired_sta_set_flags(void *priv, const u8 *addr,
     authdata = (struct infwired_auth_data *)(buf + sizeof(*fullhdr));
     authdata->iad_auth = authorized;
     memcpy(authdata->iad_sta, addr, ETH_ALEN);
-    wpa_printf(MSG_INFO, "INFWIRED: Set STA flags - ifname=%s addr=" MACSTR
-		   " total_flags=0x%x flags_or=0x%x flags_and=0x%x authorized=%d",
+    inf_wpa_printf(MSG_INFO, "INFWIRED: Set STA flags - ifname=%s addr=" MACSTR
+		   " total_flags=0x%x flags_or=0x%x flags_and=0x%x authorized=%d\n",
 		   drv->common.ifname, MAC2STR(addr), total_flags, flags_or, flags_and,
 		   !!(total_flags & WPA_STA_AUTHORIZED));
     int res = send(drv->common.sock, (u8 *)buf, len, 0);
     os_free(buf);
 
     if (res < 0) {
-        wpa_printf(MSG_ERROR,
-                   "wired_send_eapol - packet len: %lu - failed: send: %s",
+        inf_wpa_printf(MSG_ERROR,
+                   "wired_send_eapol - packet len: %lu - failed: send: %s\n",
                    (unsigned long)len, strerror(errno));
     }
 
@@ -714,7 +763,7 @@ static int wpa_driver_infwired_set_acl_auth(void *priv,
     struct hostapd_data *hapd = drv->common.ctx;
 	struct sta_info *sta = ap_get_sta(hapd, mac);
 	if (!sta) {
-		wpa_printf(MSG_ERROR, "INFWIRED: sta for " MACSTR "not found",
+		inf_wpa_printf(MSG_ERROR, "INFWIRED: sta for " MACSTR "not found\n",
 				   MAC2STR(mac));
 		return 0;
 	}
@@ -733,7 +782,8 @@ static int driver_infwired_get_inact(void *priv, const u8 *addr)
 {
     struct wpa_driver_infwired_data *drv = priv;
     //TODO: MUTE
-    wpa_printf(MSG_INFO, "INFWIRED: Get Inactivity for ifname=%s addr=" MACSTR,
+    inf_wpa_printf(MSG_INFO, "INFWIRED: Get Inactivity for ifname=%s "
+               "addr=" MACSTR"\n",
                drv->common.ifname, MAC2STR(addr));
     return -1;
 }
