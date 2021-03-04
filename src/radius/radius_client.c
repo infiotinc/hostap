@@ -23,7 +23,7 @@
 /**
  * RADIUS_CLIENT_MAX_WAIT - RADIUS client maximum retry timeout in seconds
  */
-#define RADIUS_CLIENT_MAX_WAIT 120
+#define RADIUS_CLIENT_MAX_WAIT 10
 
 /**
  * RADIUS_CLIENT_MAX_FAILOVER - RADIUS client maximum retries
@@ -47,7 +47,7 @@
  * The number of failed retry attempts after which the RADIUS server will be
  * changed (if one of more backup servers are configured).
  */
-#define RADIUS_CLIENT_NUM_FAILOVER 4
+#define RADIUS_CLIENT_NUM_FAILOVER 3
 
 
 /**
@@ -467,8 +467,11 @@ static int radius_client_retransmit(struct radius_client_data *radius,
 	entry->attempts++;
 	entry->accu_attempts++;
 	hostapd_logger(radius->ctx, entry->addr, HOSTAPD_MODULE_RADIUS,
-		       HOSTAPD_LEVEL_DEBUG, "Resending RADIUS message (id=%d)",
-		       radius_msg_get_hdr(entry->msg)->identifier);
+		       HOSTAPD_LEVEL_DEBUG, "Resending RADIUS message (id=%d) "
+			   "attempts=%d, accum_attempts=%d",
+		       radius_msg_get_hdr(entry->msg)->identifier,
+			   entry->attempts,
+			   entry->accu_attempts);
 
 	os_get_reltime(&entry->last_attempt);
 	buf = radius_msg_get_buf(entry->msg);
@@ -1185,9 +1188,15 @@ radius_change_server(struct radius_client_data *radius,
 		}
 
 		if (bind(sel_sock, cl_addr, claddrlen) < 0) {
-			wpa_printf(MSG_INFO, "bind[radius]: %s",
-				   strerror(errno));
-			return -1;
+			if (oserv != nserv) {
+				wpa_printf(MSG_INFO, "bind[radius]: %s"
+						  "ignore error, socket already bound",
+					   	  strerror(errno));
+			} else {
+				wpa_printf(MSG_INFO, "bind[radius]: %s",
+						   strerror(errno));
+				return -1;
+			}
 		}
 	}
 

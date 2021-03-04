@@ -96,7 +96,7 @@ struct eapol_state_machine {
 	} be_auth_state;
 	/* constants */
 	unsigned int serverTimeout; /* default 30; 1..X */
-#define BE_AUTH_DEFAULT_serverTimeout 30
+#define BE_AUTH_DEFAULT_serverTimeout 60
 	/* counters */
 	Counter backendResponses;
 	Counter backendAccessChallenges;
