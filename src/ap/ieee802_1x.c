@@ -1892,6 +1892,100 @@ static int ieee802_1x_update_vlan(struct radius_msg *msg,
 #endif /* CONFIG_NO_VLAN */
 
 
+struct radius_vendor_specific_info {
+	u32 vsi_vendorid;
+	u8 vsi_subtype;
+	u8 vsi_vendorname[32];
+	void (*vsi_storecb)(struct hostapd_data *hapd,
+						struct sta_info *sta,
+						u32 vsi_vendorid,
+						u8 vsi_subtype,
+						u8 *attr, size_t alen);
+};
+
+#define RADIUS_VENDOR_ID_ARUBA (14823)
+enum {
+	RADIUS_VENDOR_ATTR_ARUBA_USER_GROUP = 36
+};
+
+static void
+aruba_store_role(struct hostapd_data *hapd,
+				 struct sta_info *sta,
+				 u32 vsi_vendorid,
+				 u8 vsi_subtype,
+				 u8* attr,
+				 size_t alen)
+{
+	if (sta->user_role) {
+		free(sta->user_role);
+		sta->user_role = NULL;
+	}
+
+	sta->user_role = os_zalloc(alen + 2);
+	if (sta->user_role == NULL) {
+		hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE8021X,
+					   HOSTAPD_LEVEL_INFO,
+					   "unable to allocate memory to store user role");
+		return;
+	}
+	os_snprintf(sta->user_role, alen+1, "%s", attr);
+	return;
+}
+
+struct radius_vendor_specific_info g_radius_supported_vsi[] = {
+	{
+		.vsi_vendorid = 14823,
+		.vsi_subtype = RADIUS_VENDOR_ATTR_ARUBA_USER_GROUP,
+		.vsi_vendorname = "Aruba",
+		.vsi_storecb = aruba_store_role
+	}
+};
+
+static void
+ieee802_1x_store_supported_vendor_attrs(struct radius_msg *msg,
+										struct sta_info *sta,
+										struct hostapd_data *hapd)
+{
+	u32 num_supported_vsi = 
+		sizeof(g_radius_supported_vsi) / sizeof(struct radius_vendor_specific_info);
+	u32 ii = 0;
+	for (ii = 0; ii < num_supported_vsi; ii++) {
+		u8 *attr = NULL;
+		size_t alen = 0;
+		attr = radius_msg_get_vendor_attr(msg,
+					   				      g_radius_supported_vsi[ii].vsi_vendorid,
+								          g_radius_supported_vsi[ii].vsi_subtype,
+								   		  &alen);
+		if (attr == NULL || alen == 0) {
+			hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE8021X,
+						   HOSTAPD_LEVEL_INFO,
+						   "cannot find vendorid %d, vendor name %s",
+						   g_radius_supported_vsi[ii].vsi_vendorid,
+						   g_radius_supported_vsi[ii].vsi_vendorname);
+			continue;
+		}
+
+		char *attr_as_str = os_zalloc(alen + 2);
+		os_snprintf(attr_as_str, alen + 1, "%s", attr);
+		hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE8021X,
+					   HOSTAPD_LEVEL_INFO,
+					   "found vendorid %d, vendor name %s attr=%s",
+					   g_radius_supported_vsi[ii].vsi_vendorid,
+					   g_radius_supported_vsi[ii].vsi_vendorname,
+					   attr_as_str);
+		if (g_radius_supported_vsi[ii].vsi_storecb) {
+			g_radius_supported_vsi[ii].vsi_storecb(hapd,
+												   sta,
+												   g_radius_supported_vsi[ii].vsi_vendorid,
+												   g_radius_supported_vsi[ii].vsi_subtype,
+												   attr,
+												   alen);
+		}
+		free(attr_as_str);
+	}
+
+}
+
 /**
  * ieee802_1x_receive_auth - Process RADIUS frames from Authentication Server
  * @msg: RADIUS response message
@@ -1993,6 +2087,8 @@ ieee802_1x_receive_auth(struct radius_msg *msg, struct radius_msg *req,
 		    ap_sta_bind_vlan(hapd, sta) < 0)
 			break;
 #endif /* CONFIG_NO_VLAN */
+
+		ieee802_1x_store_supported_vendor_attrs(msg, sta, hapd);
 
 		sta->session_timeout_set = !!session_timeout_set;
 		os_get_reltime(&sta->session_timeout);
