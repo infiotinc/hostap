@@ -377,6 +377,9 @@ void ap_free_sta(struct hostapd_data *hapd, struct sta_info *sta)
 	eloop_cancel_timeout(ap_sta_reset_steer_flag_timer, hapd, sta);
 #endif /* CONFIG_WNM_AP */
 
+	if (sta->user_role) {
+		os_free(sta->user_role);
+	}
 	os_free(sta->ifname_wds);
 
 	os_free(sta);
@@ -725,6 +728,7 @@ struct sta_info * ap_sta_add(struct hostapd_data *hapd, const u8 *addr)
 	ap_sta_remove_in_other_bss(hapd, sta);
 	sta->last_seq_ctrl = WLAN_INVALID_MGMT_SEQ;
 	dl_list_init(&sta->ip6addr);
+	sta->user_role = NULL;
 
 #ifdef CONFIG_TAXONOMY
 	sta_track_claim_taxonomy_info(hapd->iface, addr,
@@ -1221,7 +1225,7 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 			   int authorized)
 {
 	const u8 *dev_addr = NULL;
-	char buf[256];
+	char buf[512];
 #ifdef CONFIG_P2P
 	u8 addr[ETH_ALEN];
 	u8 ip_addr_buf[4];
@@ -1265,13 +1269,24 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 			(pbuf + sta->eapol_sm->identity_len + 1) <= pbufend) {
 			memcpy(pbuf, sta->eapol_sm->identity, sta->eapol_sm->identity_len);
 			pbuf += sta->eapol_sm->identity_len;
-			*pbuf = '\0';
-			pbuf++;
 			wpa_printf(MSG_INFO, "INFWIRED: AUTH sending username %s", buf);
 		} else {
 			sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s", "__ignore__");
+			pbuf += sz;
 		}
 	}
+
+	if (sta->user_role) {
+		size_t user_role_len = strlen(sta->user_role);
+		if ((pbuf + user_role_len + 2) <= pbufend) {
+			size_t usz = os_snprintf(pbuf, user_role_len + 2, " %s", sta->user_role);
+			pbuf += usz;
+			wpa_printf(MSG_INFO, "INFWIRED: AUTH sending userole %s", buf);
+		}
+	} else {
+		sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s", "__ignore__");
+	}
+
 	
 	wpa_printf(MSG_INFO, "INFWIRED: AUTH sending msg %s", buf);
 	if (hapd->sta_authorized_cb)

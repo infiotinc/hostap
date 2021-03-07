@@ -288,6 +288,8 @@ struct sta_info {
 	u8 mab;
 	u8 mab_auth;
 #endif
+
+	char *user_role;
 };
 
 
