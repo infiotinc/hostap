@@ -1221,6 +1221,7 @@ const char * ap_sta_wpa_get_keyid(struct hostapd_data *hapd,
 }
 
 
+#define INF_UNKNOWN_PARAM_VALUE "__ignore__"
 void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 			   int authorized)
 {
@@ -1260,7 +1261,7 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 	if (strlen(hapd->conf->bridge) > 0) {
 		sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s ", hapd->conf->bridge);
 	} else {
-		sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s ", "__ignore__");
+		sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s ", INF_UNKNOWN_PARAM_VALUE);
 	}
 	pbuf += sz;
 
@@ -1271,7 +1272,7 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 			pbuf += sta->eapol_sm->identity_len;
 			wpa_printf(MSG_INFO, "INFWIRED: AUTH sending username %s", buf);
 		} else {
-			sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s", "__ignore__");
+			sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s ", INF_UNKNOWN_PARAM_VALUE);
 			pbuf += sz;
 		}
 	}
@@ -1284,7 +1285,7 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 			wpa_printf(MSG_INFO, "INFWIRED: AUTH sending userole %s", buf);
 		}
 	} else {
-		sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s", "__ignore__");
+		sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s", INF_UNKNOWN_PARAM_VALUE);
 	}
 
 	
