@@ -1905,7 +1905,8 @@ struct radius_vendor_specific_info {
 
 #define RADIUS_VENDOR_ID_ARUBA (14823)
 enum {
-	RADIUS_VENDOR_ATTR_ARUBA_USER_GROUP = 36
+	RADIUS_VENDOR_ATTR_ARUBA_WIRED_USER_GROUP = 36,
+	RADIUS_VENDOR_ATTR_ARUBA_WIRELESS_USER_GROUP = 1
 };
 
 static void
@@ -1935,7 +1936,13 @@ aruba_store_role(struct hostapd_data *hapd,
 struct radius_vendor_specific_info g_radius_supported_vsi[] = {
 	{
 		.vsi_vendorid = 14823,
-		.vsi_subtype = RADIUS_VENDOR_ATTR_ARUBA_USER_GROUP,
+		.vsi_subtype = RADIUS_VENDOR_ATTR_ARUBA_WIRED_USER_GROUP,
+		.vsi_vendorname = "Aruba",
+		.vsi_storecb = aruba_store_role
+	},
+	{
+		.vsi_vendorid = 14823,
+		.vsi_subtype = RADIUS_VENDOR_ATTR_ARUBA_WIRELESS_USER_GROUP,
 		.vsi_vendorname = "Aruba",
 		.vsi_storecb = aruba_store_role
 	}
@@ -1959,9 +1966,10 @@ ieee802_1x_store_supported_vendor_attrs(struct radius_msg *msg,
 		if (attr == NULL || alen == 0) {
 			hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE8021X,
 						   HOSTAPD_LEVEL_INFO,
-						   "cannot find vendorid %d, vendor name %s",
+						   "### cannot find vendorid %d, vendor name %s, subtype: %d",
 						   g_radius_supported_vsi[ii].vsi_vendorid,
-						   g_radius_supported_vsi[ii].vsi_vendorname);
+						   g_radius_supported_vsi[ii].vsi_vendorname,
+						   g_radius_supported_vsi[ii].vsi_subtype);
 			continue;
 		}
 
@@ -1969,9 +1977,10 @@ ieee802_1x_store_supported_vendor_attrs(struct radius_msg *msg,
 		os_snprintf(attr_as_str, alen + 1, "%s", attr);
 		hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE8021X,
 					   HOSTAPD_LEVEL_INFO,
-					   "found vendorid %d, vendor name %s attr=%s",
+					   "found vendorid %d, vendor name %s, subtype: %d, attr=%s",
 					   g_radius_supported_vsi[ii].vsi_vendorid,
 					   g_radius_supported_vsi[ii].vsi_vendorname,
+					   g_radius_supported_vsi[ii].vsi_subtype,
 					   attr_as_str);
 		if (g_radius_supported_vsi[ii].vsi_storecb) {
 			g_radius_supported_vsi[ii].vsi_storecb(hapd,
