@@ -265,6 +265,13 @@ struct airtime_sta_weight {
 	u8 addr[ETH_ALEN];
 };
 
+#ifdef CONFIG_INF_AUTH
+struct infiot_auth_params {
+       char **user_list;
+       int num_users;
+};
+#endif
+
 /**
  * struct hostapd_bss_config - Per-BSS configuration
  */
@@ -277,7 +284,10 @@ struct hostapd_bss_config {
 	char **vlan_members;
 	int num_vlan_members;
 #endif
-
+#ifdef CONFIG_INF_AUTH
+	struct *infiot_auth_params inf_auth;
+	int inf_num_auth_params;
+#endif
 	enum hostapd_logger_level logger_syslog_level, logger_stdout_level;
 
 	unsigned int logger_syslog; /* module bitfield */

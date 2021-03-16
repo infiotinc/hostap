@@ -30,6 +30,9 @@ export BINDIR ?= /usr/local/bin/
 ifdef CONFIG_INF_WIRED_PAE
 CLFAGS += -DCONFIG_INF_WIRED_PAE
 endif
+ifdef CONFIG_INF_WIRED_PAE
+CLFAGS += -DCONFIG_INF_AUTH
+endif
 
 -include .config
 
