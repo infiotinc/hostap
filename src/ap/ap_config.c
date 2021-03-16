@@ -683,6 +683,32 @@ static void hostapd_config_free_bss_vlan_members(struct hostapd_bss_config *bss)
 }
 #endif
 
+#ifdef CONFIG_INF_AUTH
+static void hostapd_config_free_inf_auth_members(struct hostapd_bss_config *bss)
+{
+	int ii = 0;
+	if (bss->inf_num_auth_params == 0) {
+		return;
+	}
+
+	if (bss->inf_auth == NULL) {
+		wpa_printf(MSG_WARNING, "INFAUTH: Auth members is NULL when "
+				   "num_auth_params is %d",
+				   bss->inf_num_auth_params);
+		return;
+	}
+	struct *inf_auth_params = bss->inf_auth;
+	char **user_list = inf_auth_params->user_list; 
+	for (ii = 0; ii < inf_auth_params->num_users; ii++) {
+		free(bss->inf_auth_members[ii]);
+	}
+	free (user_list);
+	free(bss->inf_auth_members);
+
+	return;
+}
+#endif
+
 void hostapd_config_free_bss(struct hostapd_bss_config *conf)
 {
 #if defined(CONFIG_WPS) || defined(CONFIG_HS20)

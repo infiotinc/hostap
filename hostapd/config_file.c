@@ -2439,6 +2439,120 @@ static int inf_pae_wired_parse_vlan_members(struct hostapd_bss_config *bss,
 }
 #endif
 
+#ifdef CONFIG_INF_AUTH
+static void inf_auth_print_params(struct infiot_auth_params *auth)
+{
+	int ii = 0;
+	int num_users = auth->num_users;
+	for (ii = 0; ii < num_users; ii++) {
+		wpa_printf(MSG_INFO, "INFAUTH vlan member %d is %s",
+				   ii,
+				   auth->user_list[ii]);
+	}
+	return;
+}
+
+static int inf_auth_parse_params(struct infiot_auth_params *auth, char *pos)
+{
+	char *tok_prev, *tok_start;
+	int num_users = 0, j = 0, vlan_len = 0;
+	int idx = 0;
+
+	if (strlen(pos) == 0) {
+		wpa_printf(MSG_WARNING, "INFAUTH: User list is empty");
+		return 0;
+	}
+
+	//Currently Infiot Auth file is expected to be in the format
+	//INF_USER_TAG = abc, xyz. Initial version might/will mostly have just 1 user
+	//but the code handles multiple user case also.
+	tok_prev = pos;
+	num_users = 1;
+	while ((tok_prev = os_strchr(tok_prev, ','))) {
+		num_users++;
+		tok_prev++;
+		while (*tok_prev == ' ')
+			tok_prev++;
+	}
+
+	char **user_list;
+	user_list = os_calloc(sizeof(char *), num_users + 1);
+	if (user_list == NULL) {
+		wpa_printf(MSG_WARNING, "INFAUTH: unable to allocate memory for "
+				   "User lists, ignoring reading the User lists");
+		return 0;
+	}
+	tok_prev = pos;
+	for (j = 0; j < num_users; j++) {
+		tok_start = os_strchr(tok_prev, ',');
+		if (tok_start) {
+			vlan_len = tok_start - tok_prev;
+			user_list[idx] = os_calloc(1, vlan_len + 1);
+			if (user_list[idx] == NULL) {
+				wpa_printf(MSG_WARNING, "INFAUTH: unable to parse a "
+						   "User list (j=%d), skipping", j);
+				continue;
+			}
+			os_memcpy(user_list[idx], tok_prev, vlan_len);
+			tok_prev = ++tok_start;
+
+			while (*tok_prev == ' ')
+				tok_prev++;
+			idx++;
+		} else {
+			vlan_len = os_strlen(tok_prev);
+			user_list[idx] = os_calloc(1, vlan_len + 1);
+			if (user_list[idx] == NULL) {
+				wpa_printf(MSG_WARNING, "INFAUTH: unable to parse a "
+						   "User list (j=%d), skipping", j);
+				continue;
+			}
+			os_memcpy(user_list[idx], tok_prev, vlan_len);
+			idx++;
+		}
+	}
+
+	auth->user_list = user_list;
+	auth->num_users = num_users;
+	inf_auth_print_params(auth);
+	return 0;
+}
+
+static int hostapd_config_read_infiot_params(struct hostapd_bss_config *bss, char *fname, char *line)
+{
+	FILE *f;
+	char buf[512], *pos;
+	int line = 0;
+	struct infiot_auth_params *auth;
+
+    while (*fname == ' ' || *fname == '=')
+            fname++;
+
+	f = fopen(fname, "r");
+	if (!f) {
+		wpa_printf(MSG_ERROR, "Inf auth list file '%s' not found.", fname);
+		return -1;
+	}
+
+	auth = os_malloc(sizeof(struct infiot_auth_params));
+	while (fgets(buf, sizeof(buf), f)) {
+		pos = buf;
+		if (strncmp(pos, INF_USER_TAG, strlen(INF_USER_TAG)) == 0) {
+			pos = pos + strlen(INF_USER_TAG);
+			while (*pos == ' ' || *pos == '\t' || *pos == '=')
+				pos++;
+			inf_auth_parse_params(*auth, pos);
+		}
+	}
+
+	bss->inf_auth = auth
+	bss->inf_num_auth_params = 1; //For now it just indicates only user auth is used
+
+	fclose(f);
+	return 0;
+}
+#endif
+
 static int hostapd_config_fill(struct hostapd_config *conf,
 			       struct hostapd_bss_config *bss,
 			       const char *buf, char *pos, int line)
@@ -4585,6 +4699,10 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 		conf->mab = atoi(pos);
 	} else if (os_strcmp(buf, "vlan_members") == 0) {
 		inf_pae_wired_parse_vlan_members(bss, pos, line);
+#endif
+#ifdef CONFIG_INF_AUTH
+	} else if (os_strcmp(buf, INFIOT_AUTH_CFG_FILE) == 0) {
+		hostapd_config_read_infiot_params(bss, pos, line);
 #endif
 	} else {
 		wpa_printf(MSG_ERROR,
