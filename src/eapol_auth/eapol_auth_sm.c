@@ -905,6 +905,46 @@ static int eapol_sm_sta_entry_alive(struct eapol_authenticator *eapol,
 }
 
 
+static u8 inf_user_auth(struct eapol_state_machine *sm,
+				const u8 *eap, size_t len)
+{
+	const u8 *identity;
+	size_t identity_len;
+	const struct eap_hdr *hdr = (const struct eap_hdr *) eap;
+
+	if (len <= sizeof(struct eap_hdr) ||
+	    (hdr->code == EAP_CODE_RESPONSE &&
+	     eap[sizeof(struct eap_hdr)] != EAP_TYPE_IDENTITY) ||
+	    (hdr->code == EAP_CODE_INITIATE &&
+	     eap[sizeof(struct eap_hdr)] != EAP_ERP_TYPE_REAUTH) ||
+	    (hdr->code != EAP_CODE_RESPONSE &&
+	     hdr->code != EAP_CODE_INITIATE)) {
+		wpa_printf(MSG_INFO, "INFAUTH: Not a EAP response, let if go");
+		return 1;
+	}
+
+	identity = eap_get_identity(sm->eap, &identity_len);
+	if (identity == NULL) {
+		wpa_printf(MSG_INFO, "INFAUTH: unable to parse identity");
+		return 0;
+	}
+
+	os_free(sm->identity);
+	sm->identity = (u8 *) dup_binstr(identity, identity_len);
+	if (sm->identity == NULL) {
+		wpa_printf(MSG_INFO, "INFAUTH: unable to parse identity");
+		sm->identity_len = 0;
+		return 0;
+	}
+
+	sm->identity_len = identity_len;
+	wpa_printf(MSG_INFO, "INFAUTH: identity %s found in EAP",
+		sm->identity);
+
+	/* do AUTH here */
+	return 0;
+}
+
 static void eapol_sm_step_run(struct eapol_state_machine *sm)
 {
 	struct eapol_authenticator *eapol = sm->eapol;
@@ -971,13 +1011,22 @@ restart:
 					   "but no aaaEapRespData available");
 				return;
 			}
+
+			u8 is_auth = inf_user_auth(sm,
+						wpabuf_head(sm->eap_if->aaaEapRespData),
+						wpabuf_len(sm->eap_if->aaaEapRespData));
+			if (is_auth == 0) {
+				SM_ENTER(AUTH_PAE, ABORTING);
+				SM_STEP_RUN(AUTH_PAE);
+				goto done;
+			}
 			sm->eapol->cb.aaa_send(
 				sm->eapol->conf.ctx, sm->sta,
 				wpabuf_head(sm->eap_if->aaaEapRespData),
 				wpabuf_len(sm->eap_if->aaaEapRespData));
 		}
 	}
-
+done:
 	if (eapol_sm_sta_entry_alive(eapol, addr))
 		sm->eapol->cb.eapol_event(sm->eapol->conf.ctx, sm->sta,
 					  EAPOL_AUTH_SM_CHANGE);
