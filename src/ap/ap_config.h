@@ -266,6 +266,8 @@ struct airtime_sta_weight {
 };
 
 #ifdef CONFIG_INF_AUTH
+#define INF_USER_TAG "users"
+#define INFIOT_AUTH_CFG_FILE "infiot_auth_file"
 struct infiot_auth_params {
        char **user_list;
        int num_users;
@@ -285,7 +287,11 @@ struct hostapd_bss_config {
 	int num_vlan_members;
 #endif
 #ifdef CONFIG_INF_AUTH
+<<<<<<< HEAD
 	struct *infiot_auth_params inf_auth;
+=======
+	struct infiot_auth_params *inf_auth;
+>>>>>>> ca1e8b8b1... Modify hostapd to consume Infiot auth config
 	int inf_num_auth_params;
 #endif
 	enum hostapd_logger_level logger_syslog_level, logger_stdout_level;
