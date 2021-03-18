@@ -24,8 +24,13 @@ endif
 CFLAGS += $(EXTRA_CFLAGS)
 CFLAGS += -I$(abspath ../src)
 CFLAGS += -I$(abspath ../src/utils)
+CFLAGS += -DCONFIG_INF_AUTH
 
 export BINDIR ?= /usr/local/bin/
+
+ifdef CONFIG_INF_AUTH
+CLFAGS += -DCONFIG_INF_AUTH
+endif
 
 ifdef CONFIG_INF_WIRED_PAE
 CLFAGS += -DCONFIG_INF_WIRED_PAE
@@ -1297,6 +1302,7 @@ ifdef CONFIG_CODE_COVERAGE
 	$(Q)cd $(dir $@); $(CC) -c -o $(notdir $@) $(CFLAGS) $(notdir $<)
 else
 %.o: %.c
+	echo "Infiot print" $(CFLAGS)
 	$(Q)$(CC) -c -o $@ $(CFLAGS) $<
 	@$(E) "  CC " $<
 endif

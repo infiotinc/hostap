@@ -2445,7 +2445,7 @@ static void inf_auth_print_params(struct infiot_auth_params *auth)
 	int ii = 0;
 	int num_users = auth->num_users;
 	for (ii = 0; ii < num_users; ii++) {
-		wpa_printf(MSG_INFO, "INFAUTH vlan member %d is %s",
+		wpa_printf(MSG_INFO, "INFAUTH user %d is %s",
 				   ii,
 				   auth->user_list[ii]);
 	}
@@ -2518,11 +2518,10 @@ static int inf_auth_parse_params(struct infiot_auth_params *auth, char *pos)
 	return 0;
 }
 
-static int hostapd_config_read_infiot_params(struct hostapd_bss_config *bss, char *fname, char *line)
+static int hostapd_config_read_infiot_params(struct hostapd_bss_config *bss, char *fname)
 {
 	FILE *f;
 	char buf[512], *pos;
-	int line = 0;
 	struct infiot_auth_params *auth;
 
     while (*fname == ' ' || *fname == '=')
@@ -2541,11 +2540,11 @@ static int hostapd_config_read_infiot_params(struct hostapd_bss_config *bss, cha
 			pos = pos + strlen(INF_USER_TAG);
 			while (*pos == ' ' || *pos == '\t' || *pos == '=')
 				pos++;
-			inf_auth_parse_params(*auth, pos);
+			inf_auth_parse_params(auth, pos);
 		}
 	}
 
-	bss->inf_auth = auth
+	bss->inf_auth = auth;
 	bss->inf_num_auth_params = 1; //For now it just indicates only user auth is used
 
 	fclose(f);
@@ -4702,7 +4701,7 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 #endif
 #ifdef CONFIG_INF_AUTH
 	} else if (os_strcmp(buf, INFIOT_AUTH_CFG_FILE) == 0) {
-		hostapd_config_read_infiot_params(bss, pos, line);
+		hostapd_config_read_infiot_params(bss, pos);
 #endif
 	} else {
 		wpa_printf(MSG_ERROR,

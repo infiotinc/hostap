@@ -697,13 +697,13 @@ static void hostapd_config_free_inf_auth_members(struct hostapd_bss_config *bss)
 				   bss->inf_num_auth_params);
 		return;
 	}
-	struct *inf_auth_params = bss->inf_auth;
+	struct infiot_auth_params *inf_auth_params = bss->inf_auth;
 	char **user_list = inf_auth_params->user_list; 
 	for (ii = 0; ii < inf_auth_params->num_users; ii++) {
-		free(bss->inf_auth_members[ii]);
+		free(user_list[ii]);
 	}
 	free (user_list);
-	free(bss->inf_auth_members);
+	free(bss->inf_auth);
 
 	return;
 }
@@ -770,6 +770,8 @@ void hostapd_config_free_bss(struct hostapd_bss_config *conf)
 #ifdef CONFIG_INF_WIRED_PAE
 	hostapd_config_free_bss_vlan_members(conf);
 #endif
+#ifdef CONFIG_INF_AUTH
+	hostapd_config_free_inf_auth_members(conf);
 	os_free(conf->time_zone);
 
 #ifdef CONFIG_IEEE80211R_AP
