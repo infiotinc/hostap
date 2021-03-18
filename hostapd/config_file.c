@@ -2455,7 +2455,7 @@ static void inf_auth_print_params(struct infiot_auth_params *auth)
 static int inf_auth_parse_params(struct infiot_auth_params *auth, char *pos)
 {
 	char *tok_prev, *tok_start;
-	int num_users = 0, j = 0, vlan_len = 0;
+	int num_users = 0, j = 0, name_len = 0;
 	int idx = 0;
 
 	if (strlen(pos) == 0) {
@@ -2486,28 +2486,29 @@ static int inf_auth_parse_params(struct infiot_auth_params *auth, char *pos)
 	for (j = 0; j < num_users; j++) {
 		tok_start = os_strchr(tok_prev, ',');
 		if (tok_start) {
-			vlan_len = tok_start - tok_prev;
-			user_list[idx] = os_calloc(1, vlan_len + 1);
+			name_len = tok_start - tok_prev;
+			user_list[idx] = os_calloc(1, name_len + 1);
 			if (user_list[idx] == NULL) {
 				wpa_printf(MSG_WARNING, "INFAUTH: unable to parse a "
 						   "User list (j=%d), skipping", j);
 				continue;
 			}
-			os_memcpy(user_list[idx], tok_prev, vlan_len);
+
+			os_memcpy(user_list[idx], tok_prev, name_len);
 			tok_prev = ++tok_start;
 
 			while (*tok_prev == ' ')
 				tok_prev++;
 			idx++;
 		} else {
-			vlan_len = os_strlen(tok_prev);
-			user_list[idx] = os_calloc(1, vlan_len + 1);
+			name_len = os_strlen(tok_prev);
+			user_list[idx] = os_calloc(1, name_len + 1);
 			if (user_list[idx] == NULL) {
 				wpa_printf(MSG_WARNING, "INFAUTH: unable to parse a "
 						   "User list (j=%d), skipping", j);
 				continue;
 			}
-			os_memcpy(user_list[idx], tok_prev, vlan_len);
+			os_memcpy(user_list[idx], tok_prev, name_len);
 			idx++;
 		}
 	}

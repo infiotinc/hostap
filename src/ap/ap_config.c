@@ -772,6 +772,7 @@ void hostapd_config_free_bss(struct hostapd_bss_config *conf)
 #endif
 #ifdef CONFIG_INF_AUTH
 	hostapd_config_free_inf_auth_members(conf);
+#endif
 	os_free(conf->time_zone);
 
 #ifdef CONFIG_IEEE80211R_AP

@@ -287,11 +287,7 @@ struct hostapd_bss_config {
 	int num_vlan_members;
 #endif
 #ifdef CONFIG_INF_AUTH
-<<<<<<< HEAD
-	struct *infiot_auth_params inf_auth;
-=======
 	struct infiot_auth_params *inf_auth;
->>>>>>> ca1e8b8b1... Modify hostapd to consume Infiot auth config
 	int inf_num_auth_params;
 #endif
 	enum hostapd_logger_level logger_syslog_level, logger_stdout_level;
