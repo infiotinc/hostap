@@ -980,7 +980,11 @@ static u8 inf_user_auth(struct eapol_state_machine *sm,
 		          "INFAUTH: Unable to extract Infiot Auth information BSS is NULL, BLOCKING access");
 		return 0;
 	} else {
-	    ret = inf_auth_check(bss->inf_auth, sm->identity, sm->identity_len);
+		if (bss->inf_auth) { 
+	    	ret = inf_auth_check(bss->inf_auth, sm->identity, sm->identity_len);
+		} else {
+			ret = 1;
+		}
 	}
 
 	return ret;
