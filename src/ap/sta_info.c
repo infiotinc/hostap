@@ -1285,7 +1285,7 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 			wpa_printf(MSG_INFO, "INFWIRED: AUTH sending userole %s", buf);
 		}
 	} else {
-		sz = os_snprintf(pbuf, pbufend - pbuf + 1, "%s", INF_UNKNOWN_PARAM_VALUE);
+		sz = os_snprintf(pbuf, pbufend - pbuf + 1, " %s", INF_UNKNOWN_PARAM_VALUE);
 	}
 
 	
