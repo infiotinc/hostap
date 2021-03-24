@@ -1251,7 +1251,9 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 	if (dev_addr)
 		os_snprintf(buf, sizeof(buf), MACSTR " p2p_dev_addr=" MACSTR,
 			    MAC2STR(sta->addr), MAC2STR(dev_addr));
-	else
+	else {
+		
+	}
 #endif /* CONFIG_P2P */
 	char *pbuf = buf;
 	char *pbufend = buf + sizeof(buf) - 1;
