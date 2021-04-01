@@ -19,4 +19,8 @@ int hostapd_add_acl_maclist(struct mac_acl_entry **acl, int *num,
 void hostapd_remove_acl_mac(struct mac_acl_entry **acl, int *num,
 			    const u8 *addr);
 
+#ifdef CONFIG_INF_AUTH
+void inf_wpa_printf(int level, const char *fmt, ...);
+#endif
+
 #endif /* CONFIG_FILE_H */

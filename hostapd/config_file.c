@@ -2445,7 +2445,7 @@ static void inf_auth_print_params(struct infiot_auth_params *auth)
 	int ii = 0;
 	int num_users = auth->num_users;
 	for (ii = 0; ii < num_users; ii++) {
-		wpa_printf(MSG_INFO, "INFAUTH user %d is %s",
+		inf_wpa_printf(MSG_INFO, "INFAUTH user %d is %s",
 				   ii,
 				   auth->user_list[ii]);
 	}
@@ -2459,7 +2459,7 @@ static int inf_auth_parse_params(struct infiot_auth_params *auth, char *pos)
 	int idx = 0;
 
 	if (strlen(pos) == 0) {
-		wpa_printf(MSG_WARNING, "INFAUTH: User list is empty");
+		inf_wpa_printf(MSG_WARNING, "INFAUTH: User list is empty");
 		return 0;
 	}
 
@@ -2478,7 +2478,7 @@ static int inf_auth_parse_params(struct infiot_auth_params *auth, char *pos)
 	char **user_list;
 	user_list = os_calloc(sizeof(char *), num_users + 1);
 	if (user_list == NULL) {
-		wpa_printf(MSG_WARNING, "INFAUTH: unable to allocate memory for "
+		inf_wpa_printf(MSG_WARNING, "INFAUTH: unable to allocate memory for "
 				   "User lists, ignoring reading the User lists");
 		return 0;
 	}
@@ -2489,7 +2489,7 @@ static int inf_auth_parse_params(struct infiot_auth_params *auth, char *pos)
 			name_len = tok_start - tok_prev;
 			user_list[idx] = os_calloc(1, name_len + 1);
 			if (user_list[idx] == NULL) {
-				wpa_printf(MSG_WARNING, "INFAUTH: unable to parse a "
+				inf_wpa_printf(MSG_WARNING, "INFAUTH: unable to parse a "
 						   "User list (j=%d), skipping", j);
 				continue;
 			}
@@ -2504,7 +2504,7 @@ static int inf_auth_parse_params(struct infiot_auth_params *auth, char *pos)
 			name_len = os_strlen(tok_prev);
 			user_list[idx] = os_calloc(1, name_len + 1);
 			if (user_list[idx] == NULL) {
-				wpa_printf(MSG_WARNING, "INFAUTH: unable to parse a "
+				inf_wpa_printf(MSG_WARNING, "INFAUTH: unable to parse a "
 						   "User list (j=%d), skipping", j);
 				continue;
 			}
