@@ -906,26 +906,26 @@ static int eapol_sm_sta_entry_alive(struct eapol_authenticator *eapol,
 	return eapol->cb.sta_entry_alive(eapol->conf.ctx, addr);
 }
 
-
+#ifdef CONFIG_INF_AUTH
 static u8 inf_auth_check(struct infiot_auth_params *inf_auth, const u8 *identity, int identity_len) 
 {
 	int num_users = inf_auth->num_users;
 	char **user_list = inf_auth->user_list;
 
 	if (user_list == NULL) {
-		wpa_printf(MSG_INFO, "INFAUTH: Can't get configured edge owner name, BLOCKING access");
+		inf_wpa_printf(MSG_INFO, "INFAUTH: Can't get configured edge owner name, BLOCKING access");
 		return 0;
 	}
 
 	for (int ii=0; ii < num_users; ii++) {
 		if (strncmp(user_list[ii], (const char *)identity, identity_len) == 0) {
-			wpa_printf(MSG_INFO, "INFAUTH: ALLOWING access. Owner name: %s, identity: %s\n", 
+			inf_wpa_printf(MSG_INFO, "INFAUTH: ALLOWING access. Owner name: %s, identity: %s\n", 
 			                                                      user_list[ii], identity);
 			return 1;
 		}
 	}
 
-	wpa_printf(MSG_INFO, "INFAUTH: BLOCKING access. Owner name: %s, identity: %s\n", 
+	inf_wpa_printf(MSG_INFO, "INFAUTH: BLOCKING access. Owner name: %s, identity: %s\n", 
 			                                                      user_list[0], identity);
 	return 0;
 }
@@ -945,20 +945,20 @@ static u8 inf_user_auth(struct eapol_state_machine *sm,
 	     eap[sizeof(struct eap_hdr)] != EAP_ERP_TYPE_REAUTH) ||
 	    (hdr->code != EAP_CODE_RESPONSE &&
 	     hdr->code != EAP_CODE_INITIATE)) {
-		wpa_printf(MSG_INFO, "INFAUTH: Not a EAP response, let it go");
+		inf_wpa_printf(MSG_INFO, "INFAUTH: Not a EAP response, let it go");
 		return 1;
 	}
 
 	identity = eap_get_identity(sm->eap, &identity_len);
 	if (identity == NULL) {
-		wpa_printf(MSG_INFO, "INFAUTH: unable to parse identity, BLOCKING access");
+		inf_wpa_printf(MSG_INFO, "INFAUTH: unable to parse identity, BLOCKING access");
 		return 0;
 	}
 
 	os_free(sm->identity);
 	sm->identity = (u8 *) dup_binstr(identity, identity_len);
 	if (sm->identity == NULL) {
-		wpa_printf(MSG_INFO, "INFAUTH: unable to parse identity, BLOCKING access");
+		inf_wpa_printf(MSG_INFO, "INFAUTH: unable to parse identity, BLOCKING access");
 		sm->identity_len = 0;
 		return 0;
 	}
@@ -969,14 +969,14 @@ static u8 inf_user_auth(struct eapol_state_machine *sm,
 
 	struct hostapd_data *hapd = sm->eapol->conf.ctx;
 	if (hapd == NULL) {
-		wpa_printf(MSG_INFO, 
+		inf_wpa_printf(MSG_INFO, 
 		        "INFAUTH: Unable to extract Infiot Auth information hapd is NULL, BLOCKING access");
 		return 0;
 	}
 	
 	struct hostapd_bss_config *bss = hapd->conf;
 	if (bss == NULL) {
-		wpa_printf(MSG_INFO, 
+		inf_wpa_printf(MSG_INFO, 
 		          "INFAUTH: Unable to extract Infiot Auth information BSS is NULL, BLOCKING access");
 		return 0;
 	} else {
@@ -989,6 +989,7 @@ static u8 inf_user_auth(struct eapol_state_machine *sm,
 
 	return ret;
 }
+#endif
 
 static void eapol_sm_step_run(struct eapol_state_machine *sm)
 {
@@ -1056,7 +1057,7 @@ restart:
 					   "but no aaaEapRespData available");
 				return;
 			}
-
+#ifdef CONFIG_INF_AUTH
 			u8 is_auth = inf_user_auth(sm,
 						wpabuf_head(sm->eap_if->aaaEapRespData),
 						wpabuf_len(sm->eap_if->aaaEapRespData));
@@ -1066,6 +1067,7 @@ restart:
 				SM_STEP_RUN(AUTH_PAE);
 				goto done;
 			}
+#endif
 			sm->eapol->cb.aaa_send(
 				sm->eapol->conf.ctx, sm->sta,
 				wpabuf_head(sm->eap_if->aaaEapRespData),

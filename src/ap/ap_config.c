@@ -692,7 +692,7 @@ static void hostapd_config_free_inf_auth_members(struct hostapd_bss_config *bss)
 	}
 
 	if (bss->inf_auth == NULL) {
-		wpa_printf(MSG_WARNING, "INFAUTH: Auth members is NULL when "
+		inf_wpa_printf(MSG_WARNING, "INFAUTH: Auth members is NULL when "
 				   "num_auth_params is %d",
 				   bss->inf_num_auth_params);
 		return;
