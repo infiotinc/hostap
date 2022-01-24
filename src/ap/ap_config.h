@@ -19,6 +19,7 @@
 #include "wps/wps.h"
 #include "fst/fst.h"
 #include "vlan.h"
+#include "radius/radius_client.h"
 
 /**
  * mesh_conf - local MBSS state and settings
@@ -64,6 +65,7 @@ struct mac_acl_entry {
 };
 
 struct hostapd_radius_servers;
+struct hostapd_radius_vendor_specific_group_attrs_ctx;
 struct ft_remote_r0kh;
 struct ft_remote_r1kh;
 
@@ -323,6 +325,7 @@ struct hostapd_bss_config {
 	int radius_das_require_event_timestamp;
 	int radius_das_require_message_authenticator;
 	struct hostapd_ip_addr radius_das_client_addr;
+	struct hostapd_radius_vendor_specific_group_attrs_ctx radius_vsi_ctx;
 	u8 *radius_das_shared_secret;
 	size_t radius_das_shared_secret_len;
 

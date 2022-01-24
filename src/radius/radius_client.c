@@ -1496,6 +1496,14 @@ radius_client_init(void *ctx, struct hostapd_radius_servers *conf)
 	return radius;
 }
 
+void
+hostapd_radius_vendor_specific_group_attrs_init(
+	struct hostapd_radius_vendor_specific_group_attrs_ctx *ctx)
+{
+	ctx->rvsi_ctx = NULL;
+	ctx->num_rvsi = 0;
+	return;
+}
 
 /**
  * radius_client_deinit - Deinitialize RADIUS client

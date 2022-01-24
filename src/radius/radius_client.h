@@ -232,6 +232,31 @@ typedef enum {
 	RADIUS_RX_INVALID_AUTHENTICATOR
 } RadiusRxResult;
 
+struct radius_vendor_specific_group_attrs {
+	u32 vsi_vendorid;
+	u8 vsi_subtype;
+	u8 vsi_vendorname[32];
+	void (*vsi_storecb)(void *hapd,
+						void *sta,
+						u32 vsi_vendorid,
+						u8 vsi_subtype,
+						u8 *attr, size_t alen);
+};
+
+struct hostapd_radius_vendor_specific_group_attrs_ctx {
+	struct radius_vendor_specific_group_attrs *rvsi_ctx;
+	u32 num_rvsi;
+};
+
+void hostapd_radius_vendor_specific_group_attrs_init(
+	struct hostapd_radius_vendor_specific_group_attrs_ctx *ctx);
+void radius_store_vendor_specific_role(void *hapd,
+				 void *sta,
+				 u32 vsi_vendorid,
+				 u8 vsi_subtype,
+				 u8* attr,
+				 size_t alen);
+
 struct radius_client_data;
 
 int radius_client_register(struct radius_client_data *radius,

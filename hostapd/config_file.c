@@ -674,6 +674,60 @@ static int hostapd_parse_das_client(struct hostapd_bss_config *bss, char *val)
 
 	return 0;
 }
+
+static int
+hostapd_parse_vendor_specific_group_attrs_cfg(struct hostapd_bss_config *bss,
+		  									  const char *val)
+{
+	struct radius_vendor_specific_group_attrs *vsga = NULL;
+
+	vsga = os_realloc_array(bss->radius_vsi_ctx.rvsi_ctx,
+							bss->radius_vsi_ctx.num_rvsi + 1,
+							sizeof(struct radius_vendor_specific_group_attrs));
+	if (vsga == NULL) {
+		inf_wpa_printf(MSG_INFO, "INFCFG: parsing for vendor specific group "
+					"attrs, unable to allocate memory");
+		return -1;
+	}
+
+	char *pos1 = (char *)val;
+	char *pos2;
+	int ii = 0;
+	int attrs1[2] = {0, 0};
+	u8 attr2[32] = {0};
+	while(pos1 && pos1[0]) {
+		if (ii == 2) {
+			snprintf((char *)attr2, 31, "%s", pos1);
+			break;
+		}
+		if (ii == 0 || ii == 1) {
+			attrs1[ii] = atoi(pos1);
+			ii++;
+		}
+		pos2 = os_strchr(pos1, ',');
+		//inf_wpa_printf(MSG_INFO, "INFCFG: pos2=%p, pos1=%p", pos2, pos1);
+		pos1 = pos2 + 1;
+	}
+
+	vsga[bss->radius_vsi_ctx.num_rvsi].vsi_vendorid = attrs1[0];
+	vsga[bss->radius_vsi_ctx.num_rvsi].vsi_subtype = attrs1[1];
+	vsga[bss->radius_vsi_ctx.num_rvsi].vsi_storecb = radius_store_vendor_specific_role;
+	memset(vsga[bss->radius_vsi_ctx.num_rvsi].vsi_vendorname, 0, 32);
+	memcpy(vsga[bss->radius_vsi_ctx.num_rvsi].vsi_vendorname, attr2, 31);
+
+	char ssid_str[SSID_MAX_LEN+1] = {0};
+	os_memcpy(ssid_str, bss->ssid.ssid,
+			bss->ssid.ssid_len<SSID_MAX_LEN ? bss->ssid.ssid_len : SSID_MAX_LEN);
+	inf_wpa_printf(MSG_INFO, "INFCFG: vendor specific info id=%u, subtype=%u "
+				   "vendor_name=%s bss=%s",
+				  vsga[bss->radius_vsi_ctx.num_rvsi].vsi_vendorid,
+				  vsga[bss->radius_vsi_ctx.num_rvsi].vsi_subtype,
+				  vsga[bss->radius_vsi_ctx.num_rvsi].vsi_vendorname,
+				  ssid_str);
+	bss->radius_vsi_ctx.rvsi_ctx = vsga;
+	bss->radius_vsi_ctx.num_rvsi++;
+	return 0;
+}
 #endif /* CONFIG_NO_RADIUS */
 
 
@@ -930,6 +984,7 @@ static int hostapd_config_bss(struct hostapd_config *conf, const char *ifname)
 		os_free(bss);
 		return -1;
 	}
+	hostapd_radius_vendor_specific_group_attrs_init(&bss->radius_vsi_ctx);
 
 	conf->bss[conf->num_bss++] = bss;
 	conf->last_bss = bss;
@@ -3037,6 +3092,8 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 		bss->radius_das_time_window = atoi(pos);
 	} else if (os_strcmp(buf, "radius_das_require_event_timestamp") == 0) {
 		bss->radius_das_require_event_timestamp = atoi(pos);
+	} else if(os_strcmp(buf, "radius_group_role_attr") == 0) {
+		hostapd_parse_vendor_specific_group_attrs_cfg(bss, pos);
 	} else if (os_strcmp(buf, "radius_das_require_message_authenticator") ==
 		   0) {
 		bss->radius_das_require_message_authenticator = atoi(pos);
