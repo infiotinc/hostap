@@ -465,6 +465,14 @@ static void hostapd_config_free_radius(struct hostapd_radius_server *servers,
 	os_free(servers);
 }
 
+static void hostapd_config_free_radius_vendor_specific_attrs(struct radius_vendor_specific_group_attrs *vsi)
+{
+	if (vsi) {
+		os_free(vsi);
+	}
+
+	return;
+}
 
 struct hostapd_radius_attr *
 hostapd_config_get_radius_attr(struct hostapd_radius_attr *attr, u8 type)

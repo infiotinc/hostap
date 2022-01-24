@@ -1892,31 +1892,22 @@ static int ieee802_1x_update_vlan(struct radius_msg *msg,
 #endif /* CONFIG_NO_VLAN */
 
 
-struct radius_vendor_specific_info {
-	u32 vsi_vendorid;
-	u8 vsi_subtype;
-	u8 vsi_vendorname[32];
-	void (*vsi_storecb)(struct hostapd_data *hapd,
-						struct sta_info *sta,
-						u32 vsi_vendorid,
-						u8 vsi_subtype,
-						u8 *attr, size_t alen);
-};
-
 #define RADIUS_VENDOR_ID_ARUBA (14823)
 enum {
 	RADIUS_VENDOR_ATTR_ARUBA_WIRED_USER_GROUP = 36,
 	RADIUS_VENDOR_ATTR_ARUBA_WIRELESS_USER_GROUP = 1
 };
 
-static void
-aruba_store_role(struct hostapd_data *hapd,
-				 struct sta_info *sta,
+void 
+radius_store_vendor_specific_role(void *hapd_userctx,
+				 void *sta_userctx,
 				 u32 vsi_vendorid,
 				 u8 vsi_subtype,
 				 u8* attr,
 				 size_t alen)
 {
+	struct hostapd_data *hapd = hapd_userctx;
+	struct sta_info *sta = sta_userctx;
 	if (sta->user_role) {
 		free(sta->user_role);
 		sta->user_role = NULL;
@@ -1933,28 +1924,28 @@ aruba_store_role(struct hostapd_data *hapd,
 	return;
 }
 
-struct radius_vendor_specific_info g_radius_supported_vsi[] = {
+struct radius_vendor_specific_group_attrs g_radius_supported_vsi[] = {
 	{
 		.vsi_vendorid = 14823,
 		.vsi_subtype = RADIUS_VENDOR_ATTR_ARUBA_WIRED_USER_GROUP,
 		.vsi_vendorname = "Aruba",
-		.vsi_storecb = aruba_store_role
+		.vsi_storecb = radius_store_vendor_specific_role
 	},
 	{
 		.vsi_vendorid = 14823,
 		.vsi_subtype = RADIUS_VENDOR_ATTR_ARUBA_WIRELESS_USER_GROUP,
 		.vsi_vendorname = "Aruba",
-		.vsi_storecb = aruba_store_role
+		.vsi_storecb = radius_store_vendor_specific_role
 	}
 };
 
 static void
-ieee802_1x_store_supported_vendor_attrs(struct radius_msg *msg,
+ieee802_1x_store_builtin_supported_vendor_attrs(struct radius_msg *msg,
 										struct sta_info *sta,
 										struct hostapd_data *hapd)
 {
 	u32 num_supported_vsi = 
-		sizeof(g_radius_supported_vsi) / sizeof(struct radius_vendor_specific_info);
+		sizeof(g_radius_supported_vsi) / sizeof(struct radius_vendor_specific_group_attrs);
 	u32 ii = 0;
 	for (ii = 0; ii < num_supported_vsi; ii++) {
 		u8 *attr = NULL;
@@ -1964,9 +1955,9 @@ ieee802_1x_store_supported_vendor_attrs(struct radius_msg *msg,
 								          g_radius_supported_vsi[ii].vsi_subtype,
 								   		  &alen);
 		if (attr == NULL || alen == 0) {
-			hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE8021X,
-						   HOSTAPD_LEVEL_INFO,
-						   "### cannot find vendorid %d, vendor name %s, subtype: %d",
+			inf_wpa_printf(MSG_INFO,
+						   "INF8021x: cannot find vendorid %d, vendor name %s, "
+						   "subtype: %d\n",
 						   g_radius_supported_vsi[ii].vsi_vendorid,
 						   g_radius_supported_vsi[ii].vsi_vendorname,
 						   g_radius_supported_vsi[ii].vsi_subtype);
@@ -1975,9 +1966,9 @@ ieee802_1x_store_supported_vendor_attrs(struct radius_msg *msg,
 
 		char *attr_as_str = os_zalloc(alen + 2);
 		os_snprintf(attr_as_str, alen + 1, "%s", attr);
-		hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE8021X,
-					   HOSTAPD_LEVEL_INFO,
-					   "found vendorid %d, vendor name %s, subtype: %d, attr=%s",
+		inf_wpa_printf(MSG_INFO,
+					   "INF8021x: found vendorid %d, vendor name %s, "
+					   "subtype: %d, attr=%s\n",
 					   g_radius_supported_vsi[ii].vsi_vendorid,
 					   g_radius_supported_vsi[ii].vsi_vendorname,
 					   g_radius_supported_vsi[ii].vsi_subtype,
@@ -1990,9 +1981,74 @@ ieee802_1x_store_supported_vendor_attrs(struct radius_msg *msg,
 												   attr,
 												   alen);
 		}
-		free(attr_as_str);
+		os_free(attr_as_str);
+		os_free(attr);
 	}
 
+}
+
+static void
+ieee802_1x_store_configured_custom_attrs(struct radius_msg *msg,
+										struct sta_info *sta,
+										struct hostapd_data *hapd)
+{
+	u32 num_supported_vsi = hapd->conf->radius_vsi_ctx.num_rvsi;
+	struct radius_vendor_specific_group_attrs *vsga =
+								hapd->conf->radius_vsi_ctx.rvsi_ctx;
+	u32 ii = 0;
+	for (ii = 0; ii < num_supported_vsi; ii++) {
+		u8 *attr = NULL;
+		u8 buf[256+1] = {0};
+		size_t alen = 0;
+		if (vsga[ii].vsi_subtype == RADIUS_ATTR_VENDOR_SPECIFIC) {
+			attr = radius_msg_get_vendor_attr(msg,
+											vsga[ii].vsi_vendorid,
+											vsga[ii].vsi_subtype,
+											&alen);
+			if (attr == NULL || alen == 0) {
+				inf_wpa_printf(MSG_INFO,
+							"INF8021x: cannot find vendorid %d, vendor name %s,"
+							" subtype: %d\n",
+							vsga[ii].vsi_subtype);
+				continue;
+			}
+		} else {
+			int ret = radius_msg_get_attr(msg, vsga[ii].vsi_subtype, buf, 256);
+			if (ret < 0) {
+				inf_wpa_printf(MSG_INFO,
+							"INF8021x: cannot find custom attr subtype %d\n",
+							vsga[ii].vsi_subtype);
+				continue;
+			}
+			attr = buf;
+			alen = ret;
+		}
+
+		char *attr_as_str = os_zalloc(alen + 2);
+		os_snprintf(attr_as_str, alen + 1, "%s", attr);
+		inf_wpa_printf(MSG_INFO,
+					   "INF8021x: found vendorid %d, vendor name %s, "
+					   "subtype: %d, attr=%s\n",
+					   vsga[ii].vsi_vendorid,
+					   vsga[ii].vsi_vendorname,
+					   vsga[ii].vsi_subtype,
+					   attr_as_str);
+		if (vsga[ii].vsi_storecb) {
+			vsga[ii].vsi_storecb(hapd,
+								sta,
+								vsga[ii].vsi_vendorid,
+								vsga[ii].vsi_subtype,
+								attr,
+								alen);
+		}
+		os_free(attr_as_str);
+		// free only for vendor specific attribute
+		if (vsga[ii].vsi_subtype == RADIUS_ATTR_VENDOR_SPECIFIC) {
+			os_free(attr);
+		}
+	}
+
+	return;
 }
 
 /**
@@ -2097,7 +2153,9 @@ ieee802_1x_receive_auth(struct radius_msg *msg, struct radius_msg *req,
 			break;
 #endif /* CONFIG_NO_VLAN */
 
-		ieee802_1x_store_supported_vendor_attrs(msg, sta, hapd);
+		wpa_printf(MSG_INFO, "%s", "Inf8021x: radius accepted\n");
+		ieee802_1x_store_builtin_supported_vendor_attrs(msg, sta, hapd);
+		ieee802_1x_store_configured_custom_attrs(msg, sta, hapd);
 
 		sta->session_timeout_set = !!session_timeout_set;
 		os_get_reltime(&sta->session_timeout);
