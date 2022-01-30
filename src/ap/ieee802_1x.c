@@ -1987,6 +1987,7 @@ ieee802_1x_store_builtin_supported_vendor_attrs(struct radius_msg *msg,
 
 }
 
+#define IETF_VENDOR_ID (0)
 static void
 ieee802_1x_store_configured_custom_attrs(struct radius_msg *msg,
 										struct sta_info *sta,
@@ -2000,24 +2001,27 @@ ieee802_1x_store_configured_custom_attrs(struct radius_msg *msg,
 		u8 *attr = NULL;
 		u8 buf[256+1] = {0};
 		size_t alen = 0;
-		if (vsga[ii].vsi_subtype == RADIUS_ATTR_VENDOR_SPECIFIC) {
+		// if the vendor ID is not "0", then it is a vendor specific attribute
+		if (vsga[ii].vsi_vendorid != IETF_VENDOR_ID) {
 			attr = radius_msg_get_vendor_attr(msg,
 											vsga[ii].vsi_vendorid,
 											vsga[ii].vsi_subtype,
 											&alen);
 			if (attr == NULL || alen == 0) {
 				inf_wpa_printf(MSG_INFO,
-							"INF8021x: cannot find vendorid %d, vendor name %s,"
+							"INF8021x: cannot find vendor specific attribute "
+							"vendorid %d, vendor name %s,"
 							" subtype: %d\n",
 							vsga[ii].vsi_subtype);
 				continue;
 			}
+		// if the vendor ID is "0", then it is an IETF attribute
 		} else {
 			int ret = radius_msg_get_attr(msg, vsga[ii].vsi_subtype, buf, 256);
 			if (ret < 0) {
 				inf_wpa_printf(MSG_INFO,
-							"INF8021x: cannot find custom attr subtype %d\n",
-							vsga[ii].vsi_subtype);
+						"INF8021x: cannot find IETF custom attr subtype %d\n",
+						vsga[ii].vsi_subtype);
 				continue;
 			}
 			attr = buf;
