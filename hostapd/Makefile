@@ -1302,7 +1302,7 @@ ifdef CONFIG_CODE_COVERAGE
 	$(Q)cd $(dir $@); $(CC) -c -o $(notdir $@) $(CFLAGS) $(notdir $<)
 else
 %.o: %.c
-	echo "Infiot print" $(CFLAGS)
+# 	echo "Infiot print" $(CFLAGS)
 	$(Q)$(CC) -c -o $@ $(CFLAGS) $<
 	@$(E) "  CC " $<
 endif
