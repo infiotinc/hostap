@@ -3664,6 +3664,9 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 				   line);
 			return 1;
 		}
+	} else if (os_strcmp(buf, "force_ht40") == 0) {
+		conf->force_ht40 = atoi(pos);
+		wpa_printf(MSG_INFO, "INFHOSTAPD: force_ht40=%d", conf->force_ht40);
 	} else if (os_strcmp(buf, "require_ht") == 0) {
 		conf->require_ht = atoi(pos);
 	} else if (os_strcmp(buf, "obss_interval") == 0) {

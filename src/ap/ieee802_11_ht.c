@@ -207,6 +207,13 @@ static int is_40_allowed(struct hostapd_iface *iface, int channel)
 	if (iface->current_mode->mode != HOSTAPD_MODE_IEEE80211G)
 		return 1;
 
+	if (iface->conf->force_ht40) {
+		wpa_printf(MSG_INFO,
+			   "Force 40 MHz operation even if neighboring BSS is on "
+			   "overlapping channel (typically done for certification testing)");
+		return 1;
+	}
+
 	pri_freq = hostapd_hw_get_freq(iface->bss[0], iface->conf->channel);
 
 	if (iface->conf->secondary_channel > 0)
@@ -299,7 +306,7 @@ void hostapd_2040_coex_action(struct hostapd_data *hapd,
 			       HOSTAPD_MODULE_IEEE80211,
 			       HOSTAPD_LEVEL_DEBUG,
 			       "20 MHz BSS width request bit is set in BSS coexistence information field");
-		is_ht40_allowed = 0;
+		is_ht40_allowed = iface->conf->force_ht40;
 	}
 
 	if (bc_ie->coex_param & WLAN_20_40_BSS_COEX_40MHZ_INTOL) {
@@ -308,8 +315,10 @@ void hostapd_2040_coex_action(struct hostapd_data *hapd,
 		hostapd_logger(hapd, mgmt->sa,
 			       HOSTAPD_MODULE_IEEE80211,
 			       HOSTAPD_LEVEL_DEBUG,
-			       "40 MHz intolerant bit is set in BSS coexistence information field");
-		is_ht40_allowed = 0;
+			       "INFHOSTAPD: 40 MHz intolerant bit is set in BSS coexistence "
+				   "information field, force 40 MHz: %d",
+			       iface->conf->force_ht40);
+		is_ht40_allowed = iface->conf->force_ht40;
 	}
 
 	/* 20/40 BSS Intolerant Channel Report element (zero or more times) */
@@ -339,9 +348,10 @@ void hostapd_2040_coex_action(struct hostapd_data *hapd,
 			hostapd_logger(hapd, mgmt->sa,
 				       HOSTAPD_MODULE_IEEE80211,
 				       HOSTAPD_LEVEL_DEBUG,
-				       "20_40_INTOLERANT channel %d reported",
-				       chan);
-			is_ht40_allowed = 0;
+				       "INFHOSTAPD: 20_40_INTOLERANT channel %d reported "
+					   "force 40MHz: %d",
+				       chan, iface->conf->force_ht40);
+			is_ht40_allowed = iface->conf->force_ht40;
 		}
 
 		data += 2 + ielen;
