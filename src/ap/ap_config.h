@@ -951,6 +951,7 @@ struct hostapd_config {
 
 	int ht_op_mode_fixed;
 	u16 ht_capab;
+	int force_ht40;
 	int ieee80211n;
 	int secondary_channel;
 	int no_pri_sec_switch;

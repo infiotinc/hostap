@@ -297,6 +297,13 @@ static void ieee80211n_check_scan(struct hostapd_iface *iface)
 
 	iface->scan_cb = NULL;
 
+
+	if (iface->conf->force_ht40) {
+		wpa_printf(MSG_INFO,
+			   "INFHOSTAPD: Force 40 MHz operation even if neighboring BSS is on "
+			   "overlapping channel (typically done for certification testing)");
+	}
+
 	scan_res = hostapd_driver_get_scan_results(iface->bss[0]);
 	if (scan_res == NULL) {
 		hostapd_setup_interface_complete(iface, 1);
@@ -310,12 +317,13 @@ static void ieee80211n_check_scan(struct hostapd_iface *iface)
 	wpa_scan_results_free(scan_res);
 
 	iface->secondary_ch = iface->conf->secondary_channel;
-	if (!oper40) {
-		wpa_printf(MSG_INFO, "20/40 MHz operation not permitted on "
-			   "channel pri=%d sec=%d based on overlapping BSSes",
+	if (!iface->conf->force_ht40 && !oper40) {
+		wpa_printf(MSG_INFO, "INFHOSTAPD: 20/40 MHz operation not permitted on "
+			   "channel pri=%d sec=%d based on overlapping BSSes, force 40 MHz: %d",
 			   iface->conf->channel,
 			   iface->conf->channel +
-			   iface->conf->secondary_channel * 4);
+			   iface->conf->secondary_channel * 4,
+			   iface->conf->force_ht40);
 		iface->conf->secondary_channel = 0;
 		if (iface->drv_flags & WPA_DRIVER_FLAGS_HT_2040_COEX) {
 			/*
@@ -366,6 +374,12 @@ static void ieee80211n_scan_channels_2g4(struct hostapd_iface *iface,
 	affected_end = (pri_freq + sec_freq) / 2 + 40;
 	wpa_printf(MSG_DEBUG, "40 MHz affected channel range: [%d,%d] MHz",
 		   affected_start, affected_end);
+
+	if (iface->conf->force_ht40) {
+		wpa_printf(MSG_INFO,
+			   "INFHOSTAPD: Force 40 MHz operation even if neighboring BSS is on "
+			   "overlapping channel (typically done for certification testing)");
+	}
 
 	mode = iface->current_mode;
 	params->freqs = os_calloc(mode->num_channels + 1, sizeof(int));

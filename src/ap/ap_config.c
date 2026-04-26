@@ -225,6 +225,8 @@ struct hostapd_config * hostapd_config_defaults(void)
 
 	conf->ht_capab = HT_CAP_INFO_SMPS_DISABLED;
 
+	conf->force_ht40 = 0;
+
 	conf->ap_table_max_size = 255;
 	conf->ap_table_expiration_time = 60;
 	conf->track_sta_max_age = 180;
